@@ -7,6 +7,10 @@ T = TypeVar("T")
 
 
 class Subscriber(Generic[T], ABC):
+    """
+    Subscriber for an event queue. The subscriber object should be stateless, though it may load
+    data from a persistence layer.
+    """
 
     payload_type: type[T]
 

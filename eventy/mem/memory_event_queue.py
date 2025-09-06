@@ -18,8 +18,11 @@ _LOGGER = logging.getLogger(__name__)
 @dataclass
 class MemoryEventQueue(EventQueue[T]):
     """In-memory implementation of EventQueue with serialization support"""
+
     event_type: type[T]
-    serializer: Serializer[QueueEvent[T]] = field(default_factory=get_default_serializer)
+    serializer: Serializer[QueueEvent[T]] = field(
+        default_factory=get_default_serializer
+    )
     events: list[bytes] = field(default_factory=list)
     subscribers: list[Subscriber[T]] = field(default_factory=list)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
@@ -35,15 +38,14 @@ class MemoryEventQueue(EventQueue[T]):
             # Serialize the event before storing to prevent mutations
             serialized_event = self.serializer.serialize(event)
             self.events.append(serialized_event)
-            
+
             # Notify all subscribers
             for subscriber in self.subscribers:
                 try:
                     await subscriber.on_event(event)
                 except Exception:
                     # Log and continue notifying other subscribers even if one fails
-                    _LOGGER.error('subscriber_error', exc_info=True, stack_info=True)
-
+                    _LOGGER.error("subscriber_error", exc_info=True, stack_info=True)
 
     async def get_events(
         self,
@@ -133,11 +135,3 @@ class MemoryEventQueue(EventQueue[T]):
                 next_page_id = str(page_events[-1].id)
 
             return Page(items=page_events, next_page_id=next_page_id)
-
-    def clear(self) -> None:
-        """Clear all events from the queue (useful for testing)"""
-        self.events.clear()
-
-    def get_event_count(self) -> int:
-        """Get the total number of events in the queue"""
-        return len(self.events)

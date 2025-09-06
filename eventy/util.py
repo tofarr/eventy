@@ -1,10 +1,8 @@
-
-
 import importlib
 import os
 from typing import TypeVar
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 def import_from(qual_name: str):
@@ -25,8 +23,8 @@ def import_from(qual_name: str):
         >>> UserAuth = import_from('openhands.server.user_auth.UserAuth')
         >>> auth = UserAuth()
     """
-    parts = qual_name.split('.')
-    module_name = '.'.join(parts[:-1])
+    parts = qual_name.split(".")
+    module_name = ".".join(parts[:-1])
     module = importlib.import_module(module_name)
     result = getattr(module, parts[-1])
     return result
@@ -40,4 +38,3 @@ def get_impl(key: str, base_type: type[T], default_type: type) -> type[T]:
     imported_type = import_from(value)
     assert issubclass(imported_type, base_type)
     return imported_type
-

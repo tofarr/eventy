@@ -11,10 +11,10 @@ class PickleSerializer(Serializer[T]):
 
     def serialize(self, obj: T) -> bytes:
         """Serialize an object to bytes using pickle
-        
+
         Args:
             obj: The object to serialize
-            
+
         Returns:
             bytes: The pickled representation
         """
@@ -22,10 +22,10 @@ class PickleSerializer(Serializer[T]):
 
     def deserialize(self, data: bytes) -> T:
         """Deserialize bytes back to an object using pickle
-        
+
         Args:
             data: The pickled bytes
-            
+
         Returns:
             T: The unpickled object
         """
