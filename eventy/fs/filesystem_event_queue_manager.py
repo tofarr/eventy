@@ -58,11 +58,10 @@ class FilesystemEventQueueManager(QueueManager):
         queue = await self.get_event_queue(payload_type)
         await queue.subscribe(subscriber)
 
-    async def publish(self, event: QueueEvent[T]) -> None:
-        """Publish an event to the appropriate queue"""
-        payload_type = type(event.payload)
+    async def publish(self, payload_type: Type[T], payload: T) -> None:
+        """Publish a payload to the queue for the specified payload type"""
         queue = await self.get_event_queue(payload_type)
-        await queue.publish(event)
+        await queue.publish(payload)
 
     async def register(self, payload_type: type[T]) -> None:
         """Register a payload type (Create an event queue)"""

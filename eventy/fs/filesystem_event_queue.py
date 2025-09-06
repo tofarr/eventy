@@ -176,8 +176,9 @@ class FilesystemEventQueue(EventQueue[T]):
             # This would need to be implemented with file watching or polling
             pass
 
-    async def publish(self, event: QueueEvent[T]) -> None:
+    async def publish(self, payload: T) -> None:
         """Publish an event to the queue"""
+        event = QueueEvent(payload=payload)
         async with self.lock:
             await self._cleanup_old_events()
             

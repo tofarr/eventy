@@ -46,15 +46,15 @@ class MemoryEventQueueManager(QueueManager):
         """Get an event queue for the event type given (QueueManager interface)"""
         return await self.get_queue(payload_type)
 
-    async def publish(self, payload_type: Type[T], event: QueueEvent[T]) -> None:
-        """Publish an event to the queue for the specified payload type
+    async def publish(self, payload_type: Type[T], payload: T) -> None:
+        """Publish a payload to the queue for the specified payload type
 
         Args:
             payload_type: The type of payload
-            event: The event to publish
+            payload: The payload to publish
         """
         queue = await self.get_queue(payload_type)
-        await queue.publish(event)
+        await queue.publish(payload)
 
     async def subscribe(self, payload_type: Type[T], subscriber: Subscriber[T]) -> None:
         """Subscribe to events for the specified payload type
