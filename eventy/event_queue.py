@@ -2,8 +2,9 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from typing import Generic, TypeVar, Optional, AsyncIterator
 from uuid import UUID
+from eventy.event_status import EventStatus
 from eventy.page import Page
-from eventy.queue_event import QueueEvent, EventStatus
+from eventy.queue_event import QueueEvent
 from eventy.subscriber import Subscriber
 
 T = TypeVar("T")

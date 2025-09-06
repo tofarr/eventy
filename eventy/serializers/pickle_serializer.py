@@ -9,6 +9,8 @@ T = TypeVar("T")
 class PickleSerializer(Serializer[T]):
     """Default serializer implementation using Python's pickle module"""
 
+    is_json: bool = False
+
     def serialize(self, obj: T) -> bytes:
         """Serialize an object to bytes using pickle
 

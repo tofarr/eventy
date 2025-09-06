@@ -2,8 +2,8 @@ import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, UTC
 import logging
-from typing import TypeVar, Optional, List, NamedTuple
-from uuid import UUID
+from typing import TypeVar, Optional
+from uuid import UUID, uuid4
 
 from eventy.event_queue import EventQueue
 from eventy.page import Page
@@ -15,13 +15,13 @@ T = TypeVar("T")
 _LOGGER = logging.getLogger(__name__)
 
 
-class StoredEvent(NamedTuple):
+@dataclass
+class StoredEvent:
     """Internal representation of a stored event with metadata and serialized payload"""
-
     id: UUID
-    created_at: datetime
     serialized_payload: bytes
-    status: EventStatus
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    status: EventStatus = EventStatus.PROCESSING
 
 
 @dataclass
@@ -44,9 +44,9 @@ class MemoryEventQueue(EventQueue[T]):
             payload = self.serializer.deserialize(stored_event.serialized_payload)
             return QueueEvent(
                 id=stored_event.id, 
+                status=stored_event.status,
                 payload=payload, 
                 created_at=stored_event.created_at,
-                status=stored_event.status
             )
         except Exception:
             # If deserialization fails, we can't reconstruct the event
@@ -79,46 +79,32 @@ class MemoryEventQueue(EventQueue[T]):
 
     async def publish(self, payload: T) -> None:
         """Publish an event to this queue"""
-        # Create event with PROCESSING status initially
-        event = QueueEvent(payload=payload, status=EventStatus.PROCESSING)
-        
+
         async with self.lock:
             # Clean up old events before adding new ones
             await self._cleanup_old_events()
 
             # Serialize only the payload before storing to prevent mutations
-            try:
-                serialized_payload = self.serializer.serialize(payload)
-                final_status = EventStatus.PROCESSED
-            except Exception:
-                # If serialization fails, mark as ERROR
-                serialized_payload = b''  # Empty bytes for failed serialization
-                final_status = EventStatus.ERROR
-                _LOGGER.error(f"Failed to serialize payload for event {event.id}", exc_info=True)
+            event_id = uuid4()
+            serialized_payload = self.serializer.serialize(payload)
             
             stored_event = StoredEvent(
-                id=event.id,
-                created_at=event.created_at,
+                id=event_id,
                 serialized_payload=serialized_payload,
-                status=final_status,
             )
             self.events.append(stored_event)
 
-            # Create final event with correct status for subscribers
-            final_event = QueueEvent(
-                id=event.id,
-                payload=payload,
-                created_at=event.created_at,
-                status=final_status
-            )
-
             # Notify all subscribers
+            event = self._reconstruct_event(stored_event)
+            final_status = EventStatus.PROCESSING
             for subscriber in self.subscribers:
                 try:
-                    await subscriber.on_event(final_event)
+                    await subscriber.on_event(event)
                 except Exception:
+                    final_status = EventStatus.ERROR
                     # Log and continue notifying other subscribers even if one fails
                     _LOGGER.error("subscriber_error", exc_info=True, stack_info=True)
+            stored_event.status = final_status
 
     async def get_events(
         self,
