@@ -46,7 +46,9 @@ class FilesystemEventQueueManager(QueueManager):
         """Get an event queue for the specified payload type"""
         async with self.lock:
             if payload_type not in self.queues:
-                raise ValueError(f"Queue for payload type {payload_type} not registered")
+                raise ValueError(
+                    f"Queue for payload type {payload_type} not registered"
+                )
             return self.queues[payload_type]
 
     async def get_queue(self, payload_type: Type[T]) -> FilesystemEventQueue[T]:

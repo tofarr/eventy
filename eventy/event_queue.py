@@ -89,4 +89,4 @@ class EventQueue(Generic[T], ABC):
 
     @abstractmethod
     async def get_event(self, id: UUID) -> QueueEvent[T]:
-        """ Get an event given its id. """
+        """Get an event given its id."""

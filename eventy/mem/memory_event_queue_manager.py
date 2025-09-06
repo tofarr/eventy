@@ -33,7 +33,7 @@ class MemoryEventQueueManager(QueueManager):
 
         Returns:
             MemoryEventQueue[T]: The event queue for this payload type
-            
+
         Raises:
             KeyError: If no queue exists for the given payload type
         """

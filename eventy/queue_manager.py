@@ -27,11 +27,10 @@ class QueueManager(ABC):
         """Deregister a payload type (Shut down an event queue)"""
 
     async def __aenter__(self):
-        """ Begin using this queue manager """
+        """Begin using this queue manager"""
 
     async def __aexit__(self, exc_type, exc_value, traceback):
-        """ Finish using this queue manager """
-        
+        """Finish using this queue manager"""
 
 
 # Global cache for the default queue manager instance
