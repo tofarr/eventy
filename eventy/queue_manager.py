@@ -18,6 +18,21 @@ class QueueManager(ABC):
     async def get_queue_types(self) -> list[type]:
         """List all available event queues."""
 
+    @abstractmethod
+    async def register(self, payload_type: type[T]) -> None:
+        """Register a payload type (Create an event queue)"""
+
+    @abstractmethod
+    async def deregister(self, payload_type: type[T]) -> None:
+        """Deregister a payload type (Shut down an event queue)"""
+
+    async def __aenter__(self):
+        """ Begin using this queue manager """
+
+    async def __aexit__(self, exc_type, exc_value, traceback):
+        """ Finish using this queue manager """
+        
+
 
 # Global cache for the default queue manager instance
 _default_queue_manager: Optional[QueueManager] = None

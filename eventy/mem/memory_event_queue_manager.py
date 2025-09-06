@@ -14,7 +14,10 @@ T = TypeVar("T")
 
 @dataclass
 class MemoryEventQueueManager(QueueManager):
-    """Manager for memory event queues that creates them lazily by payload type"""
+    """
+    Manager for memory event queues that creates them lazily by payload type.
+    Suitable for use by a single process and small queue.
+    """
 
     serializer: Serializer = field(default_factory=get_default_serializer)
     queues: Dict[Type, MemoryEventQueue] = field(default_factory=dict)
