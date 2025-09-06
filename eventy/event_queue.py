@@ -32,4 +32,5 @@ class EventQueue(Generic[T], ABC):
         """
 
     async def publish_payload(self, payload: T) -> None:
+        """Wrap the payload given in a new event and pubish it"""
         await self.publish(Eventy(payload=payload))

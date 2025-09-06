@@ -8,7 +8,7 @@ T = TypeVar("T")
 
 
 @dataclass
-class Eventy(Generic[T], ABC):
+class QueueEvent(Generic[T], ABC):
     """Object representing an event"""
 
     payload: T

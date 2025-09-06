@@ -11,7 +11,7 @@ dependencies = [
 ]
 
 [tool.poetry]
-packages = [{include = "eventy", from = "src"}]
+packages = [{include = "eventy"}]
 
 
 [tool.poetry.group.dev.dependencies]

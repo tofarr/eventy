@@ -1,12 +1,12 @@
 from abc import ABC, abstractmethod
 from typing import TypeVar
 
-from eventy.queuey import EventQueue
+from eventy.event_queue import EventQueue
 
 T = TypeVar("T")
 
 
-class QueueyManager(ABC):
+class QueueManager(ABC):
     """Manager for coordinating access to event queues. Event queues are typically global within an application."""
 
     @abstractmethod
