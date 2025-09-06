@@ -10,8 +10,9 @@ from typing import TypeVar, Optional, List, AsyncIterator
 from uuid import UUID
 
 from eventy.event_queue import EventQueue
+from eventy.event_status import EventStatus
 from eventy.page import Page
-from eventy.queue_event import QueueEvent, EventStatus
+from eventy.queue_event import QueueEvent
 from eventy.serializers.serializer import Serializer, get_default_serializer
 from eventy.subscriber import Subscriber
 
