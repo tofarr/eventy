@@ -95,6 +95,45 @@ class MemoryEventQueue(EventQueue[T]):
 
             return Page(items=page_events, next_page_id=next_page_id)
 
+    async def get_existing_events(
+        self,
+        after_id: Optional[UUID] = None,
+        limit: Optional[int] = 100,
+    ) -> Page[QueueEvent[T]]:
+        """Get existing events from the queue with cursor-based paging"""
+        async with self.lock:
+            # Deserialize all events
+            all_events = []
+            for serialized_event in self.events:
+                try:
+                    event = self.serializer.deserialize(serialized_event)
+                    all_events.append(event)
+                except Exception:
+                    # Skip corrupted events
+                    continue
+
+            # Sort by created_at and then by id for consistent ordering
+            all_events.sort(key=lambda e: (e.created_at, e.id))
+
+            # Find starting position if after_id is provided
+            start_index = 0
+            if after_id:
+                for i, event in enumerate(all_events):
+                    if event.id == after_id:
+                        start_index = i + 1
+                        break
+
+            # Get the page of events
+            end_index = start_index + (limit or 100)
+            page_events = all_events[start_index:end_index]
+
+            # Determine next page cursor (ID of last event in this page)
+            next_page_id = None
+            if page_events and end_index < len(all_events):
+                next_page_id = str(page_events[-1].id)
+
+            return Page(items=page_events, next_page_id=next_page_id)
+
     def clear(self) -> None:
         """Clear all events from the queue (useful for testing)"""
         self.events.clear()

@@ -41,6 +41,22 @@ class EventQueue(Generic[T], ABC):
             List of events matching the criteria
         """
 
+    @abstractmethod
+    async def get_existing_events(
+        self,
+        after_id: Optional[UUID] = None,
+        limit: Optional[int] = 100,
+    ) -> Page[QueueEvent[T]]:
+        """Get existing events from the queue with cursor-based paging
+
+        Args:
+            after_id: Optional event ID to start after (for cursor-based pagination)
+            limit: Optional maximum number of events to return
+
+        Returns:
+            Page of events after the specified ID
+        """
+
     async def publish_payload(self, payload: T) -> None:
         """Wrap the payload given in a new event and pubish it"""
         await self.publish(QueueEvent(payload=payload))
