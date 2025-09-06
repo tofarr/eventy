@@ -1,5 +1,7 @@
 import asyncio
+from dataclasses import dataclass, field
 from datetime import datetime
+import logging
 from typing import TypeVar, Optional, List
 from uuid import UUID
 
@@ -7,51 +9,41 @@ from eventy.event_queue import EventQueue
 from eventy.page import Page
 from eventy.queue_event import QueueEvent
 from eventy.subscriber import Subscriber
-from eventy.mem.serializer import Serializer
-from eventy.mem.pickle_serializer import PickleSerializer
+from eventy.mem.serializer import Serializer, get_default_serializer
 
 T = TypeVar("T")
+_LOGGER = logging.getLogger(__name__)
 
 
+@dataclass
 class MemoryEventQueue(EventQueue[T]):
     """In-memory implementation of EventQueue with serialization support"""
-
-    def __init__(
-        self,
-        event_type: type[T],
-        serializer: Optional[Serializer[QueueEvent[T]]] = None
-    ):
-        """Initialize the memory event queue
-        
-        Args:
-            event_type: The type of events this queue handles
-            serializer: Optional serializer for events (defaults to PickleSerializer)
-        """
-        self.event_type = event_type
-        self._serializer = serializer or PickleSerializer[QueueEvent[T]]()
-        self._events: List[bytes] = []  # Store serialized events
-        self._subscribers: List[Subscriber[T]] = []
-        self._lock = asyncio.Lock()
+    event_type: type[T]
+    serializer: Serializer[QueueEvent[T]] = field(default_factory=get_default_serializer)
+    events: list[bytes] = field(default_factory=list)
+    subscribers: list[Subscriber[T]] = field(default_factory=list)
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     async def subscribe(self, subscriber: Subscriber[T]) -> None:
         """Add a subscriber to this queue"""
-        async with self._lock:
-            self._subscribers.append(subscriber)
+        async with self.lock:
+            self.subscribers.append(subscriber)
 
     async def publish(self, event: QueueEvent[T]) -> None:
         """Publish an event to this queue"""
-        async with self._lock:
+        async with self.lock:
             # Serialize the event before storing to prevent mutations
-            serialized_event = self._serializer.serialize(event)
-            self._events.append(serialized_event)
+            serialized_event = self.serializer.serialize(event)
+            self.events.append(serialized_event)
             
             # Notify all subscribers
-            for subscriber in self._subscribers:
+            for subscriber in self.subscribers:
                 try:
                     await subscriber.on_event(event)
                 except Exception:
-                    # Continue notifying other subscribers even if one fails
-                    pass
+                    # Log and continue notifying other subscribers even if one fails
+                    _LOGGER.error('subscriber_error', exc_info=True, stack_info=True)
+
 
     async def get_events(
         self,
@@ -81,8 +73,8 @@ class MemoryEventQueue(EventQueue[T]):
                     continue
                 filtered_events.append(event)
 
-            # Sort by created_at for consistent ordering
-            filtered_events.sort(key=lambda e: e.created_at)
+            # Sort by created_at desc for consistent ordering
+            filtered_events.sort(key=lambda e: e.created_at, reverse=True)
 
             # Handle pagination
             start_index = 0
