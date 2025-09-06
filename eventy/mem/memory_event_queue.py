@@ -53,12 +53,12 @@ class MemoryEventQueue(EventQueue[T]):
         created_at__max: Optional[datetime] = None,
     ) -> Page[QueueEvent[T]]:
         """Get existing events from the queue with optional paging parameters"""
-        async with self._lock:
+        async with self.lock:
             # Deserialize all events for filtering
             all_events = []
-            for serialized_event in self._events:
+            for serialized_event in self.events:
                 try:
-                    event = self._serializer.deserialize(serialized_event)
+                    event = self.serializer.deserialize(serialized_event)
                     all_events.append(event)
                 except Exception:
                     # Skip corrupted events
@@ -97,8 +97,8 @@ class MemoryEventQueue(EventQueue[T]):
 
     def clear(self) -> None:
         """Clear all events from the queue (useful for testing)"""
-        self._events.clear()
+        self.events.clear()
 
     def get_event_count(self) -> int:
         """Get the total number of events in the queue"""
-        return len(self._events)
+        return len(self.events)

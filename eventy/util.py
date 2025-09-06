@@ -35,7 +35,7 @@ def import_from(qual_name: str):
 def get_impl(key: str, base_type: type[T], default_type: type) -> type[T]:
     value = os.getenv(key)
     if not value:
-        assert issubclass(imported_type, default_type)
+        assert issubclass(default_type, base_type)
         return default_type
     imported_type = import_from(value)
     assert issubclass(imported_type, base_type)

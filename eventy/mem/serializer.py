@@ -33,5 +33,5 @@ class Serializer(Generic[T], ABC):
 
 def get_default_serializer():
     from eventy.mem.pickle_serializer import PickleSerializer
-    serializer = get_impl('EVENTY_SERIALIZER', Serializer, PickleSerializer)
-    return serializer
+    serializer_class = get_impl('EVENTY_SERIALIZER', Serializer, PickleSerializer)
+    return serializer_class()
