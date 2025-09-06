@@ -90,3 +90,6 @@ class EventQueue(Generic[T], ABC):
                 break
 
             page_id = page.next_page_id
+
+    async def get_event(self, id: UUID) -> QueueEvent[T]:
+        """ Get an event given its id. """
