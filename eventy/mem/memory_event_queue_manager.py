@@ -6,7 +6,7 @@ from eventy.event_queue import EventQueue
 from eventy.queue_event import QueueEvent
 from eventy.subscriber import Subscriber
 from eventy.mem.memory_event_queue import MemoryEventQueue
-from eventy.mem.serializer import Serializer, get_default_serializer
+from eventy.serializers import Serializer, get_default_serializer
 
 T = TypeVar("T")
 

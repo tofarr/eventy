@@ -1,7 +1,7 @@
 import pickle
 from typing import TypeVar
 
-from eventy.mem.serializer import Serializer
+from eventy.serializers.serializer import Serializer
 
 T = TypeVar("T")
 

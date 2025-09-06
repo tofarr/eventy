@@ -32,6 +32,6 @@ class Serializer(Generic[T], ABC):
         """
 
 def get_default_serializer():
-    from eventy.mem.pickle_serializer import PickleSerializer
+    from eventy.serializers.pickle_serializer import PickleSerializer
     serializer_class = get_impl('EVENTY_SERIALIZER', Serializer, PickleSerializer)
     return serializer_class()
