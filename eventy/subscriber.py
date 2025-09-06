@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Generic, TypeVar
 
-from eventy.eventy import Eventy
+from eventy.queue_event import QueueEvent
 
 T = TypeVar("T")
 
