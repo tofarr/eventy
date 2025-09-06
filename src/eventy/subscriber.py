@@ -1,13 +1,15 @@
 from abc import ABC, abstractmethod
 from typing import Generic, TypeVar
 
+from eventy.eventy import Eventy
+
 T = TypeVar("T")
 
 
 class Subscriber(Generic[T], ABC):
 
-    event_type: type[T]
+    payload_type: type[T]
 
     @abstractmethod
-    async def on_event(self, event: T) -> None:
+    async def on_event(self, event: Eventy[T]) -> None:
         """Callback for when an event occurs"""
