@@ -78,7 +78,7 @@ class MemoryEventQueueManager(QueueManager):
                 queue = MemoryEventQueue[T](
                     event_type=payload_type,
                     max_age=self.max_age,
-                    serializer=cast(Serializer[QueueEvent[T]], self.serializer),
+                    serializer=cast(Serializer[T], self.serializer),
                 )
                 self.queues[payload_type] = queue
 

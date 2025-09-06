@@ -2,7 +2,7 @@ import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, UTC
 import logging
-from typing import TypeVar, Optional, List
+from typing import TypeVar, Optional, List, NamedTuple
 from uuid import UUID
 
 from eventy.event_queue import EventQueue
@@ -15,18 +15,38 @@ T = TypeVar("T")
 _LOGGER = logging.getLogger(__name__)
 
 
+class StoredEvent(NamedTuple):
+    """Internal representation of a stored event with metadata and serialized payload"""
+    id: UUID
+    created_at: datetime
+    serialized_payload: bytes
+
+
 @dataclass
 class MemoryEventQueue(EventQueue[T]):
-    """In-memory implementation of EventQueue with serialization support"""
+    """In-memory implementation of EventQueue with payload-only serialization"""
 
     event_type: type[T]
     max_age: timedelta | None = None
-    serializer: Serializer[QueueEvent[T]] = field(
+    serializer: Serializer[T] = field(
         default_factory=get_default_serializer
     )
-    events: list[bytes] = field(default_factory=list)
+    events: list[StoredEvent] = field(default_factory=list)
     subscribers: list[Subscriber[T]] = field(default_factory=list)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+
+    def _reconstruct_event(self, stored_event: StoredEvent) -> QueueEvent[T]:
+        """Reconstruct a QueueEvent from a StoredEvent"""
+        try:
+            payload = self.serializer.deserialize(stored_event.serialized_payload)
+            return QueueEvent(
+                id=stored_event.id,
+                payload=payload,
+                created_at=stored_event.created_at
+            )
+        except Exception:
+            # If deserialization fails, we can't reconstruct the event
+            raise ValueError(f"Failed to deserialize payload for event {stored_event.id}")
 
     async def _cleanup_old_events(self) -> None:
         """Remove events older than max_age if max_age is set"""
@@ -36,14 +56,9 @@ class MemoryEventQueue(EventQueue[T]):
         cutoff_time = datetime.now(UTC) - self.max_age
         events_to_keep = []
         
-        for serialized_event in self.events:
-            try:
-                event = self.serializer.deserialize(serialized_event)
-                if event.created_at >= cutoff_time:
-                    events_to_keep.append(serialized_event)
-            except Exception:
-                # Skip corrupted events (they'll be removed)
-                continue
+        for stored_event in self.events:
+            if stored_event.created_at >= cutoff_time:
+                events_to_keep.append(stored_event)
         
         if len(events_to_keep) != len(self.events):
             removed_count = len(self.events) - len(events_to_keep)
@@ -63,9 +78,14 @@ class MemoryEventQueue(EventQueue[T]):
             # Clean up old events before adding new ones
             await self._cleanup_old_events()
             
-            # Serialize the event before storing to prevent mutations
-            serialized_event = self.serializer.serialize(event)
-            self.events.append(serialized_event)
+            # Serialize only the payload before storing to prevent mutations
+            serialized_payload = self.serializer.serialize(payload)
+            stored_event = StoredEvent(
+                id=event.id,
+                created_at=event.created_at,
+                serialized_payload=serialized_payload
+            )
+            self.events.append(stored_event)
 
             # Notify all subscribers
             for subscriber in self.subscribers:
@@ -87,11 +107,11 @@ class MemoryEventQueue(EventQueue[T]):
             # Clean up old events before retrieving
             await self._cleanup_old_events()
             
-            # Deserialize all events for filtering
+            # Reconstruct events for filtering
             all_events = []
-            for serialized_event in self.events:
+            for stored_event in self.events:
                 try:
-                    event = self.serializer.deserialize(serialized_event)
+                    event = self._reconstruct_event(stored_event)
                     all_events.append(event)
                 except Exception:
                     # Skip corrupted events
@@ -138,20 +158,15 @@ class MemoryEventQueue(EventQueue[T]):
             # Clean up old events before counting
             await self._cleanup_old_events()
             
-            # Deserialize all events for filtering
+            # Count events using stored metadata (no need to deserialize payload)
             count = 0
-            for serialized_event in self.events:
-                try:
-                    event = self.serializer.deserialize(serialized_event)
-                    # Apply datetime filters
-                    if created_at__min and event.created_at < created_at__min:
-                        continue
-                    if created_at__max and event.created_at > created_at__max:
-                        continue
-                    count += 1
-                except Exception:
-                    # Skip corrupted events
+            for stored_event in self.events:
+                # Apply datetime filters using stored metadata
+                if created_at__min and stored_event.created_at < created_at__min:
                     continue
+                if created_at__max and stored_event.created_at > created_at__max:
+                    continue
+                count += 1
             return count
 
     async def get_event(self, id: UUID) -> QueueEvent[T]:
@@ -161,14 +176,13 @@ class MemoryEventQueue(EventQueue[T]):
             await self._cleanup_old_events()
             
             # Search through all events to find the one with matching ID
-            for serialized_event in self.events:
-                try:
-                    event = self.serializer.deserialize(serialized_event)
-                    if event.id == id:
-                        return event
-                except Exception:
-                    # Skip corrupted events
-                    continue
+            for stored_event in self.events:
+                if stored_event.id == id:
+                    try:
+                        return self._reconstruct_event(stored_event)
+                    except Exception:
+                        # If reconstruction fails, treat as not found
+                        break
             
             # If we get here, the event was not found
             raise ValueError(f"Event with id {id} not found")
