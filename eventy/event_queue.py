@@ -91,5 +91,6 @@ class EventQueue(Generic[T], ABC):
 
             page_id = page.next_page_id
 
+    @abstractmethod
     async def get_event(self, id: UUID) -> QueueEvent[T]:
         """ Get an event given its id. """

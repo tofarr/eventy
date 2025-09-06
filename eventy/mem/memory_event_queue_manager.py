@@ -24,23 +24,20 @@ class MemoryEventQueueManager(QueueManager):
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     async def get_queue(self, payload_type: Type[T]) -> MemoryEventQueue[T]:
-        """Get or create an event queue for the specified payload type
+        """Get an event queue for the specified payload type
 
         Args:
             payload_type: The type of payload this queue will handle
 
         Returns:
             MemoryEventQueue[T]: The event queue for this payload type
+            
+        Raises:
+            KeyError: If no queue exists for the given payload type
         """
         async with self.lock:
             if payload_type not in self.queues:
-                # Create a new queue for this payload type
-                queue = MemoryEventQueue[T](
-                    event_type=payload_type,
-                    serializer=cast(Serializer[QueueEvent[T]], self.serializer),
-                )
-                self.queues[payload_type] = queue
-
+                raise KeyError(f"No queue registered for payload type {payload_type}")
             return cast(MemoryEventQueue[T], self.queues[payload_type])
 
     async def get_event_queue(self, payload_type: Type[T]) -> EventQueue[T]:
@@ -70,3 +67,21 @@ class MemoryEventQueueManager(QueueManager):
     async def get_queue_types(self) -> list[type]:
         """List all available event queues."""
         return list(self.queues.keys())
+
+    async def register(self, payload_type: type[T]) -> None:
+        """Register a payload type (Create an event queue)"""
+        async with self.lock:
+            if payload_type not in self.queues:
+                # Create a new queue for this payload type
+                queue = MemoryEventQueue[T](
+                    event_type=payload_type,
+                    serializer=cast(Serializer[QueueEvent[T]], self.serializer),
+                )
+                self.queues[payload_type] = queue
+
+    async def deregister(self, payload_type: type[T]) -> None:
+        """Deregister a payload type (Shut down an event queue)"""
+        async with self.lock:
+            if payload_type in self.queues:
+                # Remove the queue for this payload type
+                del self.queues[payload_type]

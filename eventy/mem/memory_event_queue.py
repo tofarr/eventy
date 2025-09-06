@@ -119,3 +119,19 @@ class MemoryEventQueue(EventQueue[T]):
                     # Skip corrupted events
                     continue
             return count
+
+    async def get_event(self, id: UUID) -> QueueEvent[T]:
+        """Get an event given its id."""
+        async with self.lock:
+            # Search through all events to find the one with matching ID
+            for serialized_event in self.events:
+                try:
+                    event = self.serializer.deserialize(serialized_event)
+                    if event.id == id:
+                        return event
+                except Exception:
+                    # Skip corrupted events
+                    continue
+            
+            # If we get here, the event was not found
+            raise ValueError(f"Event with id {id} not found")
