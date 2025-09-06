@@ -4,6 +4,7 @@ from typing import TypeVar, Dict, Type, Optional, cast
 
 from eventy.event_queue import EventQueue
 from eventy.queue_event import QueueEvent
+from eventy.queue_manager import QueueManager
 from eventy.subscriber import Subscriber
 from eventy.mem.memory_event_queue import MemoryEventQueue
 from eventy.serializers import Serializer, get_default_serializer
@@ -12,7 +13,7 @@ T = TypeVar("T")
 
 
 @dataclass
-class MemoryEventQueueManager:
+class MemoryEventQueueManager(QueueManager):
     """Manager for memory event queues that creates them lazily by payload type"""
     
     serializer: Serializer = field(default_factory=get_default_serializer)
@@ -38,6 +39,10 @@ class MemoryEventQueueManager:
                 self.queues[payload_type] = queue
             
             return cast(MemoryEventQueue[T], self.queues[payload_type])
+
+    async def get_event_queue(self, payload_type: Type[T]) -> EventQueue[T]:
+        """Get an event queue for the event type given (QueueManager interface)"""
+        return await self.get_queue(payload_type)
 
     async def publish(self, payload_type: Type[T], event: QueueEvent[T]) -> None:
         """Publish an event to the queue for the specified payload type

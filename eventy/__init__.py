@@ -11,6 +11,9 @@ from eventy.queue_event import QueueEvent
 from eventy.subscriber import Subscriber
 from eventy.page import Page
 
+# Queue Manager
+from eventy.queue_manager import QueueManager, get_default_queue_manager
+
 # Serializers
 from eventy.serializers import Serializer, PickleSerializer, get_default_serializer
 
@@ -23,6 +26,10 @@ __all__ = [
     'QueueEvent', 
     'Subscriber',
     'Page',
+    
+    # Queue Manager
+    'QueueManager',
+    'get_default_queue_manager',
     
     # Serializers
     'Serializer',
