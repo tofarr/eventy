@@ -56,8 +56,9 @@ class MemoryEventQueue(EventQueue[T]):
             await self._cleanup_old_events()
             self.subscribers.append(subscriber)
 
-    async def publish(self, event: QueueEvent[T]) -> None:
+    async def publish(self, payload: T) -> None:
         """Publish an event to this queue"""
+        event = QueueEvent(payload=payload)
         async with self.lock:
             # Clean up old events before adding new ones
             await self._cleanup_old_events()

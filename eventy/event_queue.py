@@ -22,7 +22,7 @@ class EventQueue(Generic[T], ABC):
         """Add a subscriber to this queue"""
 
     @abstractmethod
-    async def publish(self, event: QueueEvent[T]) -> None:
+    async def publish(self, payload: T) -> None:
         """Publish an event to this queue"""
 
     @abstractmethod
@@ -51,10 +51,6 @@ class EventQueue(Generic[T], ABC):
         created_at__max: Optional[datetime] = None,
     ) -> int:
         """Get the number of events matching the criteria given"""
-
-    async def publish_payload(self, payload: T) -> None:
-        """Wrap the payload given in a new event and pubish it"""
-        await self.publish(QueueEvent(payload=payload))
 
     async def iter_events(
         self,
