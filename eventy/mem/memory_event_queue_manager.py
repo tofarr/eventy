@@ -1,5 +1,6 @@
 import asyncio
 from dataclasses import dataclass, field
+from datetime import timedelta
 from typing import TypeVar, Dict, Type, cast
 
 from eventy.event_queue import EventQueue
@@ -20,6 +21,7 @@ class MemoryEventQueueManager(QueueManager):
     """
 
     serializer: Serializer = field(default_factory=get_default_serializer)
+    max_age: timedelta | None = None
     queues: Dict[Type, MemoryEventQueue] = field(default_factory=dict)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
@@ -75,6 +77,7 @@ class MemoryEventQueueManager(QueueManager):
                 # Create a new queue for this payload type
                 queue = MemoryEventQueue[T](
                     event_type=payload_type,
+                    max_age=self.max_age,
                     serializer=cast(Serializer[QueueEvent[T]], self.serializer),
                 )
                 self.queues[payload_type] = queue

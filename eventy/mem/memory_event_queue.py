@@ -1,6 +1,6 @@
 import asyncio
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta, UTC
 import logging
 from typing import TypeVar, Optional, List
 from uuid import UUID
@@ -20,6 +20,7 @@ class MemoryEventQueue(EventQueue[T]):
     """In-memory implementation of EventQueue with serialization support"""
 
     event_type: type[T]
+    max_age: timedelta | None = None
     serializer: Serializer[QueueEvent[T]] = field(
         default_factory=get_default_serializer
     )
@@ -27,14 +28,40 @@ class MemoryEventQueue(EventQueue[T]):
     subscribers: list[Subscriber[T]] = field(default_factory=list)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
+    async def _cleanup_old_events(self) -> None:
+        """Remove events older than max_age if max_age is set"""
+        if self.max_age is None:
+            return
+            
+        cutoff_time = datetime.now(UTC) - self.max_age
+        events_to_keep = []
+        
+        for serialized_event in self.events:
+            try:
+                event = self.serializer.deserialize(serialized_event)
+                if event.created_at >= cutoff_time:
+                    events_to_keep.append(serialized_event)
+            except Exception:
+                # Skip corrupted events (they'll be removed)
+                continue
+        
+        if len(events_to_keep) != len(self.events):
+            removed_count = len(self.events) - len(events_to_keep)
+            self.events = events_to_keep
+            _LOGGER.debug(f"Cleaned up {removed_count} old events from queue")
+
     async def subscribe(self, subscriber: Subscriber[T]) -> None:
         """Add a subscriber to this queue"""
         async with self.lock:
+            await self._cleanup_old_events()
             self.subscribers.append(subscriber)
 
     async def publish(self, event: QueueEvent[T]) -> None:
         """Publish an event to this queue"""
         async with self.lock:
+            # Clean up old events before adding new ones
+            await self._cleanup_old_events()
+            
             # Serialize the event before storing to prevent mutations
             serialized_event = self.serializer.serialize(event)
             self.events.append(serialized_event)
@@ -56,6 +83,9 @@ class MemoryEventQueue(EventQueue[T]):
     ) -> Page[QueueEvent[T]]:
         """Get existing events from the queue with optional paging parameters"""
         async with self.lock:
+            # Clean up old events before retrieving
+            await self._cleanup_old_events()
+            
             # Deserialize all events for filtering
             all_events = []
             for serialized_event in self.events:
@@ -104,6 +134,9 @@ class MemoryEventQueue(EventQueue[T]):
     ) -> int:
         """Get the number of events matching the criteria given"""
         async with self.lock:
+            # Clean up old events before counting
+            await self._cleanup_old_events()
+            
             # Deserialize all events for filtering
             count = 0
             for serialized_event in self.events:
@@ -123,6 +156,9 @@ class MemoryEventQueue(EventQueue[T]):
     async def get_event(self, id: UUID) -> QueueEvent[T]:
         """Get an event given its id."""
         async with self.lock:
+            # Clean up old events before searching
+            await self._cleanup_old_events()
+            
             # Search through all events to find the one with matching ID
             for serialized_event in self.events:
                 try:
