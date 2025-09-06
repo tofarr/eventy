@@ -1,13 +1,13 @@
 import asyncio
 from dataclasses import dataclass, field
-from typing import TypeVar, Dict, Type, Optional, cast
+from typing import TypeVar, Dict, Type, cast
 
 from eventy.event_queue import EventQueue
 from eventy.queue_event import QueueEvent
 from eventy.queue_manager import QueueManager
 from eventy.subscriber import Subscriber
 from eventy.mem.memory_event_queue import MemoryEventQueue
-from eventy.serializers import Serializer, get_default_serializer
+from eventy.serializers.serializer import Serializer, get_default_serializer
 
 T = TypeVar("T")
 
@@ -64,60 +64,10 @@ class MemoryEventQueueManager(QueueManager):
         queue = await self.get_queue(payload_type)
         await queue.subscribe(subscriber)
 
-    def get_queue_types(self) -> list[Type]:
+    def get_queue_types(self) -> list[type]:
         """Get all payload types that have queues created
 
         Returns:
             List of payload types with existing queues
         """
         return list(self.queues.keys())
-
-    def get_queue_count(self) -> int:
-        """Get the number of queues currently managed
-
-        Returns:
-            Number of queues
-        """
-        return len(self.queues)
-
-    async def clear_queue(self, payload_type: Type[T]) -> None:
-        """Clear all events from a specific queue
-
-        Args:
-            payload_type: The payload type whose queue to clear
-        """
-        async with self.lock:
-            if payload_type in self.queues:
-                self.queues[payload_type].clear()
-
-    async def clear_all_queues(self) -> None:
-        """Clear all events from all queues"""
-        async with self.lock:
-            for queue in self.queues.values():
-                queue.clear()
-
-    async def remove_queue(self, payload_type: Type[T]) -> bool:
-        """Remove a queue entirely
-
-        Args:
-            payload_type: The payload type whose queue to remove
-
-        Returns:
-            True if queue was removed, False if it didn't exist
-        """
-        async with self.lock:
-            if payload_type in self.queues:
-                del self.queues[payload_type]
-                return True
-            return False
-
-    def get_queue_stats(self) -> Dict[Type, int]:
-        """Get event count statistics for all queues
-
-        Returns:
-            Dictionary mapping payload types to their event counts
-        """
-        return {
-            payload_type: queue.get_event_count()
-            for payload_type, queue in self.queues.items()
-        }

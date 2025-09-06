@@ -6,9 +6,6 @@ from eventy.util import get_impl
 
 T = TypeVar("T")
 
-# Global cache for the default queue manager instance
-_default_queue_manager: Optional["QueueManager"] = None
-
 
 class QueueManager(ABC):
     """Manager for coordinating access to event queues. Event queues are typically global within an application."""
@@ -18,8 +15,12 @@ class QueueManager(ABC):
         """Get an event queue for the event type given."""
 
     @abstractmethod
-    async def list_event_queues(self) -> list[EventQueue[T]]:
+    async def get_queue_types(self) -> list[type]:
         """List all available event queues."""
+
+
+# Global cache for the default queue manager instance
+_default_queue_manager: Optional[QueueManager] = None
 
 
 def get_default_queue_manager() -> QueueManager:
