@@ -9,7 +9,7 @@ from eventy.event_queue import EventQueue
 from eventy.page import Page
 from eventy.queue_event import QueueEvent
 from eventy.subscriber import Subscriber
-from eventy.serializers import Serializer, get_default_serializer
+from eventy.serializers.serializer import Serializer, get_default_serializer
 
 T = TypeVar("T")
 _LOGGER = logging.getLogger(__name__)
@@ -97,41 +97,25 @@ class MemoryEventQueue(EventQueue[T]):
 
             return Page(items=page_events, next_page_id=next_page_id)
 
-    async def get_existing_events(
+    async def count_events(
         self,
-        after_id: Optional[UUID] = None,
-        limit: Optional[int] = 100,
-    ) -> Page[QueueEvent[T]]:
-        """Get existing events from the queue with cursor-based paging"""
+        created_at__min: Optional[datetime] = None,
+        created_at__max: Optional[datetime] = None,
+    ) -> int:
+        """Get the number of events matching the criteria given"""
         async with self.lock:
-            # Deserialize all events
-            all_events = []
+            # Deserialize all events for filtering
+            count = 0
             for serialized_event in self.events:
                 try:
                     event = self.serializer.deserialize(serialized_event)
-                    all_events.append(event)
+                    # Apply datetime filters
+                    if created_at__min and event.created_at < created_at__min:
+                        continue
+                    if created_at__max and event.created_at > created_at__max:
+                        continue
+                    count += 1
                 except Exception:
                     # Skip corrupted events
                     continue
-
-            # Sort by created_at and then by id for consistent ordering
-            all_events.sort(key=lambda e: (e.created_at, e.id))
-
-            # Find starting position if after_id is provided
-            start_index = 0
-            if after_id:
-                for i, event in enumerate(all_events):
-                    if event.id == after_id:
-                        start_index = i + 1
-                        break
-
-            # Get the page of events
-            end_index = start_index + (limit or 100)
-            page_events = all_events[start_index:end_index]
-
-            # Determine next page cursor (ID of last event in this page)
-            next_page_id = None
-            if page_events and end_index < len(all_events):
-                next_page_id = str(page_events[-1].id)
-
-            return Page(items=page_events, next_page_id=next_page_id)
+            return count

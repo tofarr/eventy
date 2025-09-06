@@ -67,10 +67,6 @@ class MemoryEventQueueManager(QueueManager):
         queue = await self.get_queue(payload_type)
         await queue.subscribe(subscriber)
 
-    def get_queue_types(self) -> list[type]:
-        """Get all payload types that have queues created
-
-        Returns:
-            List of payload types with existing queues
-        """
+    async def get_queue_types(self) -> list[type]:
+        """List all available event queues."""
         return list(self.queues.keys())
