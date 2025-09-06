@@ -7,7 +7,7 @@ from uuid import UUID
 
 from eventy.event_queue import EventQueue
 from eventy.page import Page
-from eventy.queue_event import QueueEvent
+from eventy.queue_event import QueueEvent, EventStatus
 from eventy.subscriber import Subscriber
 from eventy.serializers.serializer import Serializer, get_default_serializer
 
@@ -21,6 +21,7 @@ class StoredEvent(NamedTuple):
     id: UUID
     created_at: datetime
     serialized_payload: bytes
+    status: EventStatus
 
 
 @dataclass
@@ -42,7 +43,10 @@ class MemoryEventQueue(EventQueue[T]):
         try:
             payload = self.serializer.deserialize(stored_event.serialized_payload)
             return QueueEvent(
-                id=stored_event.id, payload=payload, created_at=stored_event.created_at
+                id=stored_event.id, 
+                payload=payload, 
+                created_at=stored_event.created_at,
+                status=stored_event.status
             )
         except Exception:
             # If deserialization fails, we can't reconstruct the event
@@ -75,24 +79,43 @@ class MemoryEventQueue(EventQueue[T]):
 
     async def publish(self, payload: T) -> None:
         """Publish an event to this queue"""
-        event = QueueEvent(payload=payload)
+        # Create event with PROCESSING status initially
+        event = QueueEvent(payload=payload, status=EventStatus.PROCESSING)
+        
         async with self.lock:
             # Clean up old events before adding new ones
             await self._cleanup_old_events()
 
             # Serialize only the payload before storing to prevent mutations
-            serialized_payload = self.serializer.serialize(payload)
+            try:
+                serialized_payload = self.serializer.serialize(payload)
+                final_status = EventStatus.PROCESSED
+            except Exception:
+                # If serialization fails, mark as ERROR
+                serialized_payload = b''  # Empty bytes for failed serialization
+                final_status = EventStatus.ERROR
+                _LOGGER.error(f"Failed to serialize payload for event {event.id}", exc_info=True)
+            
             stored_event = StoredEvent(
                 id=event.id,
                 created_at=event.created_at,
                 serialized_payload=serialized_payload,
+                status=final_status,
             )
             self.events.append(stored_event)
+
+            # Create final event with correct status for subscribers
+            final_event = QueueEvent(
+                id=event.id,
+                payload=payload,
+                created_at=event.created_at,
+                status=final_status
+            )
 
             # Notify all subscribers
             for subscriber in self.subscribers:
                 try:
-                    await subscriber.on_event(event)
+                    await subscriber.on_event(final_event)
                 except Exception:
                     # Log and continue notifying other subscribers even if one fails
                     _LOGGER.error("subscriber_error", exc_info=True, stack_info=True)
@@ -103,6 +126,7 @@ class MemoryEventQueue(EventQueue[T]):
         limit: Optional[int] = 100,
         created_at__min: Optional[datetime] = None,
         created_at__max: Optional[datetime] = None,
+        status__eq: Optional[EventStatus] = None,
     ) -> Page[QueueEvent[T]]:
         """Get existing events from the queue with optional paging parameters"""
         async with self.lock:
@@ -119,12 +143,14 @@ class MemoryEventQueue(EventQueue[T]):
                     # Skip corrupted events
                     continue
 
-            # Apply datetime filters
+            # Apply filters
             filtered_events = []
             for event in all_events:
                 if created_at__min and event.created_at < created_at__min:
                     continue
                 if created_at__max and event.created_at > created_at__max:
+                    continue
+                if status__eq and event.status != status__eq:
                     continue
                 filtered_events.append(event)
 
@@ -154,6 +180,7 @@ class MemoryEventQueue(EventQueue[T]):
         self,
         created_at__min: Optional[datetime] = None,
         created_at__max: Optional[datetime] = None,
+        status__eq: Optional[EventStatus] = None,
     ) -> int:
         """Get the number of events matching the criteria given"""
         async with self.lock:
@@ -163,10 +190,12 @@ class MemoryEventQueue(EventQueue[T]):
             # Count events using stored metadata (no need to deserialize payload)
             count = 0
             for stored_event in self.events:
-                # Apply datetime filters using stored metadata
+                # Apply filters using stored metadata
                 if created_at__min and stored_event.created_at < created_at__min:
                     continue
                 if created_at__max and stored_event.created_at > created_at__max:
+                    continue
+                if status__eq and stored_event.status != status__eq:
                     continue
                 count += 1
             return count

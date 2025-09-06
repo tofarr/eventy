@@ -11,7 +11,7 @@ from uuid import UUID
 
 from eventy.event_queue import EventQueue
 from eventy.page import Page
-from eventy.queue_event import QueueEvent
+from eventy.queue_event import QueueEvent, EventStatus
 from eventy.serializers.serializer import Serializer, get_default_serializer
 from eventy.subscriber import Subscriber
 
@@ -205,10 +205,11 @@ class FilesystemEventQueue(EventQueue[T]):
 
     async def get_events(
         self,
+        page_id: Optional[str] = None,
+        limit: Optional[int] = 100,
         created_at__min: Optional[datetime] = None,
         created_at__max: Optional[datetime] = None,
-        page_size: int = 10,
-        page_id: Optional[str] = None,
+        status__eq: Optional[EventStatus] = None,
     ) -> Page[QueueEvent[T]]:
         """Get events matching the criteria"""
         async with self.lock:
@@ -252,6 +253,8 @@ class FilesystemEventQueue(EventQueue[T]):
                     continue
                 if created_at__max and event.created_at > created_at__max:
                     continue
+                if status__eq and event.status != status__eq:
+                    continue
                 filtered_events.append(event)
 
             # Handle pagination
@@ -262,7 +265,7 @@ class FilesystemEventQueue(EventQueue[T]):
                 except ValueError:
                     start_index = 0
 
-            end_index = start_index + page_size
+            end_index = start_index + (limit or 100)
             page_events = filtered_events[start_index:end_index]
 
             # Determine next page ID
@@ -276,6 +279,7 @@ class FilesystemEventQueue(EventQueue[T]):
         self,
         created_at__min: Optional[datetime] = None,
         created_at__max: Optional[datetime] = None,
+        status__eq: Optional[EventStatus] = None,
     ) -> int:
         """Get the number of events matching the criteria"""
         async with self.lock:
@@ -291,10 +295,12 @@ class FilesystemEventQueue(EventQueue[T]):
                     event_data = self._deserialize_json_data(json_data)
                     event = self.serializer.deserialize(event_data)
 
-                    # Apply datetime filters
+                    # Apply filters
                     if created_at__min and event.created_at < created_at__min:
                         continue
                     if created_at__max and event.created_at > created_at__max:
+                        continue
+                    if status__eq and event.status != status__eq:
                         continue
 
                     count += 1
@@ -312,10 +318,12 @@ class FilesystemEventQueue(EventQueue[T]):
                         event_data = self._deserialize_json_data(json_event_data)
                         event = self.serializer.deserialize(event_data)
 
-                        # Apply datetime filters
+                        # Apply filters
                         if created_at__min and event.created_at < created_at__min:
                             continue
                         if created_at__max and event.created_at > created_at__max:
+                            continue
+                        if status__eq and event.status != status__eq:
                             continue
 
                         count += 1

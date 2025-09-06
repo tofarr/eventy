@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from typing import Generic, TypeVar, Optional, AsyncIterator
 from uuid import UUID
 from eventy.page import Page
-from eventy.queue_event import QueueEvent
+from eventy.queue_event import QueueEvent, EventStatus
 from eventy.subscriber import Subscriber
 
 T = TypeVar("T")
@@ -32,6 +32,7 @@ class EventQueue(Generic[T], ABC):
         limit: Optional[int] = 100,
         created_at__min: Optional[datetime] = None,
         created_at__max: Optional[datetime] = None,
+        status__eq: Optional[EventStatus] = None,
     ) -> Page[QueueEvent[T]]:
         """Get existing events from the queue with optional paging parameters
 
@@ -40,6 +41,7 @@ class EventQueue(Generic[T], ABC):
             limit: Optional maximum number of events to return
             created_at__min: Optionally filter out events created before this
             created_at__max: Optionally filter out events created after this
+            status__eq: Optionally filter events by status
 
         Returns:
             List of events matching the criteria
@@ -49,6 +51,7 @@ class EventQueue(Generic[T], ABC):
         self,
         created_at__min: Optional[datetime] = None,
         created_at__max: Optional[datetime] = None,
+        status__eq: Optional[EventStatus] = None,
     ) -> int:
         """Get the number of events matching the criteria given"""
 
@@ -56,6 +59,7 @@ class EventQueue(Generic[T], ABC):
         self,
         created_at__min: Optional[datetime] = None,
         created_at__max: Optional[datetime] = None,
+        status__eq: Optional[EventStatus] = None,
         limit: Optional[int] = 100,
     ) -> AsyncIterator[QueueEvent[T]]:
         """Create an async iterator over events in the queue
@@ -63,6 +67,7 @@ class EventQueue(Generic[T], ABC):
         Args:
             created_at__min: Optionally filter out events created before this datetime
             created_at__max: Optionally filter out events created after this datetime
+            status__eq: Optionally filter events by status
             limit: Optional maximum number of events to return per page (default: 100)
 
         Yields:
@@ -76,6 +81,7 @@ class EventQueue(Generic[T], ABC):
                 limit=limit,
                 created_at__min=created_at__min,
                 created_at__max=created_at__max,
+                status__eq=status__eq,
             )
 
             for event in page.items:
