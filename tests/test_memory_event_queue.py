@@ -403,7 +403,7 @@ class TestMemoryEventQueue:
     @pytest.mark.asyncio
     async def test_get_events_empty_queue(self, queue):
         """Test getting events from empty queue"""
-        page = await queue.get_events()
+        page = await queue.search_events()
         
         assert page.items == []
         assert page.next_page_id is None
@@ -413,7 +413,7 @@ class TestMemoryEventQueue:
         """Test getting events with single event"""
         await queue.publish(payload)
         
-        page = await queue.get_events()
+        page = await queue.search_events()
         
         assert len(page.items) == 1
         assert page.next_page_id is None
@@ -430,7 +430,7 @@ class TestMemoryEventQueue:
         for payload in payloads:
             await queue.publish(payload)
         
-        page = await queue.get_events()
+        page = await queue.search_events()
         
         assert len(page.items) == 5
         assert page.next_page_id is None
@@ -449,7 +449,7 @@ class TestMemoryEventQueue:
         for payload in payloads:
             await queue.publish(payload)
         
-        page = await queue.get_events(limit=3)
+        page = await queue.search_events(limit=3)
         
         assert len(page.items) == 3
         assert page.next_page_id == "3"
@@ -468,21 +468,21 @@ class TestMemoryEventQueue:
             await queue.publish(payload)
         
         # Get first page
-        page1 = await queue.get_events(limit=2)
+        page1 = await queue.search_events(limit=2)
         assert len(page1.items) == 2
         assert page1.next_page_id == "2"
         assert page1.items[0].id == 5
         assert page1.items[1].id == 4
         
         # Get second page
-        page2 = await queue.get_events(page_id=page1.next_page_id, limit=2)
+        page2 = await queue.search_events(page_id=page1.next_page_id, limit=2)
         assert len(page2.items) == 2
         assert page2.next_page_id == "4"
         assert page2.items[0].id == 3
         assert page2.items[1].id == 2
         
         # Get final page
-        page3 = await queue.get_events(page_id=page2.next_page_id, limit=2)
+        page3 = await queue.search_events(page_id=page2.next_page_id, limit=2)
         assert len(page3.items) == 1
         assert page3.next_page_id is None
         assert page3.items[0].id == 1
@@ -506,12 +506,12 @@ class TestMemoryEventQueue:
         await queue.publish(PayloadForTesting("bad", 2))
         
         # Filter for PROCESSING events
-        processing_page = await queue.get_events(status__eq=EventStatus.PROCESSING)
+        processing_page = await queue.search_events(status__eq=EventStatus.PROCESSING)
         assert len(processing_page.items) == 1
         assert processing_page.items[0].payload.message == "good"
         
         # Filter for ERROR events
-        error_page = await queue.get_events(status__eq=EventStatus.ERROR)
+        error_page = await queue.search_events(status__eq=EventStatus.ERROR)
         assert len(error_page.items) == 1
         assert error_page.items[0].payload.message == "bad"
 
@@ -533,14 +533,14 @@ class TestMemoryEventQueue:
         
         # Filter events created after 1.5 hours ago
         min_time = base_time - timedelta(hours=1, minutes=30)
-        page = await queue.get_events(created_at__min=min_time)
+        page = await queue.search_events(created_at__min=min_time)
         
         assert len(page.items) == 1
         assert page.items[0].payload.message == "new"
         
         # Filter events created before 1.5 hours ago
         max_time = base_time - timedelta(hours=1, minutes=30)
-        page = await queue.get_events(created_at__max=max_time)
+        page = await queue.search_events(created_at__max=max_time)
         
         assert len(page.items) == 1
         assert page.items[0].payload.message == "old"
@@ -672,7 +672,7 @@ class TestMemoryEventQueue:
         # Add another valid event
         await queue.publish(PayloadForTesting("valid2", 2))
         
-        page = await queue.get_events()
+        page = await queue.search_events()
         
         # Should only return the valid events, skipping corrupted one
         assert len(page.items) == 2
@@ -685,7 +685,7 @@ class TestMemoryEventQueue:
         await queue.publish(PayloadForTesting("test", 1))
         
         # Test with invalid page_id - should default to 0
-        page = await queue.get_events(page_id="invalid")
+        page = await queue.search_events(page_id="invalid")
         
         assert len(page.items) == 1
         assert page.items[0].payload.message == "test"
@@ -710,7 +710,7 @@ class TestMemoryEventQueue:
         """Test get_events with zero limit (defaults to 100)"""
         await queue.publish(PayloadForTesting("test", 1))
         
-        page = await queue.get_events(limit=0)
+        page = await queue.search_events(limit=0)
         
         # Zero limit defaults to 100, so should return the event
         assert len(page.items) == 1
@@ -723,7 +723,7 @@ class TestMemoryEventQueue:
         for payload in payloads:
             await queue.publish(payload)
         
-        page = await queue.get_events(limit=-1)
+        page = await queue.search_events(limit=-1)
         
         # Negative limit is used as-is, so start_index + (-1) = start_index - 1
         # This results in slicing from 0 to -1, which gives all but the last element
@@ -734,7 +734,7 @@ class TestMemoryEventQueue:
         """Test get_events with page_id larger than available events"""
         await queue.publish(PayloadForTesting("test", 1))
         
-        page = await queue.get_events(page_id="1000")
+        page = await queue.search_events(page_id="1000")
         
         assert len(page.items) == 0
         assert page.next_page_id is None

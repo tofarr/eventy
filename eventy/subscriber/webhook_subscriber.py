@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from eventy.subscriber import Subscriber
+from eventy.subscriber.subscriber import Subscriber
 from eventy.queue_event import QueueEvent
 from eventy.serializers.serializer import Serializer
 from eventy.serializers.json_serializer import JsonSerializer

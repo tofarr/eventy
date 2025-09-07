@@ -40,35 +40,3 @@ def get_impl(key: str, base_type: type[T], default_type: type) -> type[T]:
     imported_type = import_from(value)
     assert issubclass(imported_type, base_type)
     return imported_type
-
-
-def get_impls(key: str, base_type: type[T], default_types: list[type] | None = None) -> list[type[T]]:
-    """
-    Load types from the key environment variable.
-    
-    The environment variable should contain a comma-separated list of fully qualified names.
-    Each name should either:
-    1. Point to a class directly, or
-    2. Point to a function that returns a list of classes when called without arguments
-    
-    Returns:
-        A list of class types
-    """
-    env_value = os.getenv(key, "")
-    if not env_value.strip():
-        return default_types or []
-    
-    implementing_types = []
-    
-    # Split by comma and strip whitespace from each part
-    type_names = [name.strip() for name in env_value.split(",") if name.strip()]
-    
-    for type_name in type_names:
-        imported_item = import_from(type_name)
-
-        # Check if it's an implementation class
-        assert (isinstance(imported_item, type) and issubclass(imported_item, base_type))
-        
-        implementing_types.append(imported_item)
-    
-    return implementing_types

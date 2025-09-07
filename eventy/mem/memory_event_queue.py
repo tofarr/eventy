@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 from eventy.event_queue import EventQueue
 from eventy.page import Page
 from eventy.queue_event import QueueEvent, EventStatus
-from eventy.subscriber import Subscriber
+from eventy.subscriber.subscriber import Subscriber
 from eventy.serializers.serializer import Serializer, get_default_serializer
 
 T = TypeVar("T")
@@ -16,7 +16,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
-class StoredEvent:
+class _StoredEvent:
     """Internal representation of a stored event with metadata and serialized payload"""
 
     serialized_payload: bytes
@@ -33,14 +33,15 @@ class MemoryEventQueue(EventQueue[T]):
 
     event_type: type[T]
     serializer: Serializer[T] = field(default_factory=get_default_serializer)
-    events: list[StoredEvent] = field(default_factory=list)
+    events: list[_StoredEvent] = field(default_factory=list)
     subscribers: dict[UUID, Subscriber[T]] = field(default_factory=dict)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    worker_id: UUID = field(default_factory=uuid4)
 
     def _reconstruct_event(
-        self, event_id: int, stored_event: StoredEvent
+        self, event_id: int, stored_event: _StoredEvent
     ) -> QueueEvent[T]:
-        """Reconstruct a QueueEvent from a StoredEvent"""
+        """Reconstruct a QueueEvent from a _StoredEvent"""
         payload = self.serializer.deserialize(stored_event.serialized_payload)
         return QueueEvent(
             id=event_id,
@@ -102,7 +103,7 @@ class MemoryEventQueue(EventQueue[T]):
         async with self.lock:
             return self.subscribers.copy()
 
-    async def publish(self, payload: T) -> None:
+    async def publish(self, payload: T) -> QueueEvent[T]:
         """Publish an event to this queue"""
 
         async with self.lock:
@@ -110,7 +111,7 @@ class MemoryEventQueue(EventQueue[T]):
             # Serialize only the payload before storing to prevent mutations
             serialized_payload = self.serializer.serialize(payload)
 
-            stored_event = StoredEvent(
+            stored_event = _StoredEvent(
                 serialized_payload=serialized_payload,
             )
             self.events.append(stored_event)
@@ -120,14 +121,15 @@ class MemoryEventQueue(EventQueue[T]):
             final_status = EventStatus.PROCESSING
             for subscriber in list(self.subscribers.values()):
                 try:
-                    await subscriber.on_event(event)
+                    await subscriber.on_worker_event(event, self.worker_id, self.worker_id)
                 except Exception:
                     final_status = EventStatus.ERROR
                     # Log and continue notifying other subscribers even if one fails
                     _LOGGER.error("subscriber_error", exc_info=True, stack_info=True)
             stored_event.status = final_status
+            return event
 
-    async def get_events(
+    async def search_events(
         self,
         page_id: Optional[str] = None,
         limit: Optional[int] = 100,

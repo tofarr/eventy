@@ -3,7 +3,7 @@
 
 from abc import ABC
 from eventy.subscriber.subscriber import Subscriber
-from eventy.util import get_impls
+from eventy.util import get_impl
 
 
 class EventyConfig(ABC):
@@ -16,7 +16,6 @@ class EventyConfig(ABC):
         """ Get all payload types """
 
 
-def get_configs() -> list[EventyConfig]:
-    config_types = get_impls("EVENTY_CONFIG", EventyConfig)
-    configs = [config_type() for config_type in config_types]
-    return configs
+def get_config() -> EventyConfig:
+    config_type = get_impl("EVENTY_CONFIG", EventyConfig)
+    return config_type()

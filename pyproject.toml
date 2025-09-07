@@ -9,11 +9,18 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.25.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.20.0",
+    "pydantic (>=2.11.7,<3.0.0)"
 ]
 
 [tool.poetry]
 packages = [{include = "eventy"}]
 
+[tool.poetry.extras]
+server = [
+    "fastapi", "uvicorn", "pydantic"
+]
 
 [tool.poetry.group.dev.dependencies]
 black = "^25.1.0"

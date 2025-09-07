@@ -1,18 +1,21 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Generic, TypeVar, Optional, AsyncIterator
+import logging
+from typing import Callable, Generic, TypeVar, Optional, AsyncIterator
 from uuid import UUID
 from eventy.event_status import EventStatus
 from eventy.page import Page
 from eventy.queue_event import QueueEvent
-from eventy.subscriber import Subscriber
+from eventy.subscriber.subscriber import Subscriber
 
 T = TypeVar("T")
+_LOGGER = logging.getLogger(__name__)
 
 
 class EventQueue(Generic[T], ABC):
-    """Event queue for distributed processing."""
-
+    """ Event queue for distributed processing """
+    worker_id: UUID
+    """ Identifier for current worker """
     event_type: type[T]
     """ Type of event handled by this queue """
 
@@ -36,19 +39,19 @@ class EventQueue(Generic[T], ABC):
         """
 
     @abstractmethod
-    async def list_subscribers(self) -> dict[UUID, Subscriber[T]]:
-        """List all subscribers along with their IDs
+    async def get_subscribers(self) -> dict[UUID, Subscriber[T]]:
+        """Get all subscribers along with their IDs
 
         Returns:
             dict[UUID, Subscriber[T]]: A dictionary mapping subscriber IDs to their subscriber objects
         """
 
     @abstractmethod
-    async def publish(self, payload: T) -> None:
+    async def publish(self, payload: T) -> QueueEvent[T]:
         """Publish an event to this queue"""
 
     @abstractmethod
-    async def get_events(
+    async def search_events(
         self,
         page_id: Optional[str] = None,
         limit: Optional[int] = 100,
@@ -96,7 +99,7 @@ class EventQueue(Generic[T], ABC):
         page_id: Optional[str] = None
 
         while True:
-            page = await self.get_events(
+            page = await self.search_events(
                 page_id=page_id,
                 created_at__min=created_at__min,
                 created_at__max=created_at__max,
@@ -116,6 +119,14 @@ class EventQueue(Generic[T], ABC):
     async def get_event(self, event_id: int) -> QueueEvent[T]:
         """Get an event given its id."""
 
-    async def get_all_events(self, event_ids: list[int]) -> list[QueueEvent[T]]:
-        results = [self.get_event(event_id) for event_id in event_ids]
-        return results
+    async def get_all_events(self, event_ids: list[int]) -> list[QueueEvent[T] | None]:
+        events = []
+        for event_id in events:
+            try:
+                event = self.get_event(event_id)
+                events.append(event)
+            except Exception:
+                _LOGGER.warning('error_getting_event', exc_info=True, stack_info=True)
+                events.append(None)
+
+        return events

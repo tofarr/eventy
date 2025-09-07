@@ -413,7 +413,7 @@ class TestFilesystemEventQueue:
     @pytest.mark.asyncio
     async def test_get_events_empty_queue(self, queue):
         """Test getting events from empty queue"""
-        page = await queue.get_events()
+        page = await queue.search_events()
         
         assert page.items == []
         assert page.next_page_id is None
@@ -423,7 +423,7 @@ class TestFilesystemEventQueue:
         """Test getting events with single event"""
         await queue.publish(payload)
         
-        page = await queue.get_events()
+        page = await queue.search_events()
         
         # The current implementation doesn't work properly when there are no pages
         # _iter_events_from only works with pages, not individual event files
@@ -438,7 +438,7 @@ class TestFilesystemEventQueue:
         for payload in payloads:
             await queue.publish(payload)
         
-        page = await queue.get_events()
+        page = await queue.search_events()
         
         # The current implementation doesn't work properly when there are no pages
         assert len(page.items) == 0
@@ -452,7 +452,7 @@ class TestFilesystemEventQueue:
         for payload in payloads:
             await queue.publish(payload)
         
-        page = await queue.get_events(limit=3)
+        page = await queue.search_events(limit=3)
         
         # The current implementation doesn't work properly when there are no pages
         assert len(page.items) == 0
@@ -467,7 +467,7 @@ class TestFilesystemEventQueue:
             await queue.publish(payload)
         
         # The current implementation doesn't work properly when there are no pages
-        page1 = await queue.get_events(limit=2)
+        page1 = await queue.search_events(limit=2)
         assert len(page1.items) == 0
         assert page1.next_page_id is None
 
