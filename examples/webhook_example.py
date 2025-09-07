@@ -35,9 +35,10 @@ async def main():
     
     print(f"Created webhook subscriber: {webhook}")
     
-    # Subscribe to the queue
+    # Subscribe to the queue - returns a UUID for managing the subscription
     subscriber_id = await queue.subscribe(webhook)
-    print(f"Subscribed with ID: {subscriber_id}")
+    print(f"Subscribed with UUID: {subscriber_id}")
+    print(f"Subscriber ID type: {type(subscriber_id)}")
     
     # Publish some test events
     test_events = [
@@ -72,11 +73,16 @@ async def main():
     print("\nWaiting for webhooks to be sent...")
     await asyncio.sleep(2)
     
-    # Unsubscribe
+    # Unsubscribe using the UUID returned from subscribe
     success = await queue.unsubscribe(subscriber_id)
-    print(f"\nUnsubscribed: {success}")
+    print(f"\nUnsubscribed using UUID {subscriber_id}: {success}")
     
     print("\n✅ Example completed!")
+    print("\nKey Features Demonstrated:")
+    print("• EventQueue.subscribe() returns a UUID for subscriber management")
+    print("• EventQueue.unsubscribe() accepts the UUID and returns success status")
+    print("• WebhookSubscriber sends HTTP requests with configurable methods and headers")
+    print("• JsonSerializer handles payload conversion with UTF-8 encoding")
     print("\nNote: Check the httpbin.org response to see the webhook data that was sent.")
 
 
