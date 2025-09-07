@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
 from typing import TypeVar, Dict, Type, cast
+from uuid import UUID
 
 from eventy.event_queue import EventQueue
 from eventy.queue_event import QueueEvent
@@ -55,10 +56,35 @@ class FilesystemEventQueueManager(QueueManager):
         """Get a filesystem event queue for the specified payload type"""
         return cast(FilesystemEventQueue[T], await self.get_event_queue(payload_type))
 
-    async def subscribe(self, payload_type: Type[T], subscriber: Subscriber[T]) -> None:
-        """Subscribe to events for a specific payload type"""
+    async def subscribe(self, payload_type: Type[T], subscriber: Subscriber[T]) -> UUID:
+        """Subscribe to events for a specific payload type
+        
+        Args:
+            payload_type: The type of payload to subscribe to
+            subscriber: The subscriber to add
+            
+        Returns:
+            UUID: A unique identifier for the subscriber that can be used to unsubscribe
+        """
         queue = await self.get_event_queue(payload_type)
-        await queue.subscribe(subscriber)
+        return await queue.subscribe(subscriber)
+
+    async def unsubscribe(self, payload_type: Type[T], subscriber_id: UUID) -> bool:
+        """Remove a subscriber from the queue for the specified payload type
+
+        Args:
+            payload_type: The type of payload the subscriber was subscribed to
+            subscriber_id: The UUID returned by subscribe()
+            
+        Returns:
+            bool: True if the subscriber was found and removed, False otherwise
+        """
+        try:
+            queue = await self.get_event_queue(payload_type)
+            return await queue.unsubscribe(subscriber_id)
+        except ValueError:
+            # Queue doesn't exist for this payload type
+            return False
 
     async def publish(self, payload_type: Type[T], payload: T) -> None:
         """Publish a payload to the queue for the specified payload type"""
@@ -74,10 +100,9 @@ class FilesystemEventQueueManager(QueueManager):
                 queue = FilesystemEventQueue[T](
                     event_type=payload_type,
                     root_path=queue_dir,
-                    max_age=self.max_age,
                     max_events_per_page=self.max_events_per_page,
                     max_page_size_bytes=self.max_page_size_bytes,
-                    serializer=cast(Serializer[QueueEvent[T]], self.serializer),
+                    serializer=cast(Serializer[T], self.serializer),
                 )
                 self.queues[payload_type] = queue
 
