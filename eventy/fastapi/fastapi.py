@@ -7,10 +7,10 @@ from eventy.event_status import EventStatus
 from eventy.eventy_config import EventyConfig
 from eventy.fastapi.websocket_subscriber import WEBSOCKETS, WebsocketSubscriber
 from eventy.queue_manager import QueueManager
-from eventy.fastapi.fastapi import (
+from fastapi import (
     APIRouter,
     FastAPI,
-    HttpException,
+    HTTPException,
     status,
     WebSocket,
     WebSocketDisconnect,
@@ -74,7 +74,7 @@ def add_queue_endpoints(
             event = await event_queue.get_event(id)
             return event
         except Exception:
-            raise HttpException(status_code=status.HTTP_404_NOT_FOUND)
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
     @fastapi.get("/event")
     async def get_all_events(event_ids: list[int]) -> list[ResponseEvent | None]:
