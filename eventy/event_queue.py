@@ -7,6 +7,7 @@ from eventy.event_status import EventStatus
 from eventy.page import Page
 from eventy.queue_event import QueueEvent
 from eventy.subscriber.subscriber import Subscriber
+from eventy.subscriber.subscription import Subscription
 
 T = TypeVar("T")
 _LOGGER = logging.getLogger(__name__)
@@ -40,7 +41,21 @@ class EventQueue(Generic[T], ABC):
         """
 
     @abstractmethod
-    async def get_subscribers(self) -> dict[UUID, Subscriber[T]]:
+    async def get_subscriber(self, subscriber_id: UUID) -> Subscriber[T]:
+        """ Get subscriber with id given """
+
+    async def get_all_subscribers(self, subscriber_ids: list[UUID]) -> list[Subscription[T] | None]:
+        subscribers = []
+        for subscriber_id in subscriber_ids:
+            try:
+                subscriber = await self.get_subscriber(subscriber_id)
+                subscribers.append(subscriber)
+            except Exception:
+                subscribers.append(None)
+        return subscribers
+
+    @abstractmethod
+    async def search_subscribers(self, page_id: Optional[str], limit: int = 100) -> Page[Subscription[T]]:
         """Get all subscribers along with their IDs
 
         Returns:
@@ -55,7 +70,7 @@ class EventQueue(Generic[T], ABC):
     async def search_events(
         self,
         page_id: Optional[str] = None,
-        limit: Optional[int] = 100,
+        limit: int = 100,
         created_at__min: Optional[datetime] = None,
         created_at__max: Optional[datetime] = None,
         status__eq: Optional[EventStatus] = None,
