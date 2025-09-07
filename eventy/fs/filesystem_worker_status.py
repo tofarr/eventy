@@ -1,11 +1,11 @@
-
 from dataclasses import dataclass
 from uuid import UUID
 
 
 @dataclass
 class FilesystemWorkerStatus:
-    """ Status of a worker - typically embedded in a file name so all can be read with a single os.listdir """
+    """Status of a worker - typically embedded in a file name so all can be read with a single os.listdir"""
+
     worker_id: UUID
     timestamp: int
     """Timestamp when this worker last declared its status"""

@@ -16,6 +16,7 @@ from eventy.serializers.json_serializer import JsonSerializer
 @dataclass
 class PayloadForTesting:
     """Test payload class for testing"""
+
     message: str
     value: int
 
@@ -23,29 +24,32 @@ class PayloadForTesting:
 @dataclass
 class BasePayload:
     """Base payload class for inheritance testing"""
+
     base_field: str
 
 
 @dataclass
 class DerivedPayload(BasePayload):
     """Derived payload class for inheritance testing"""
+
     derived_field: int
 
 
 @dataclass
 class UnrelatedPayload:
     """Unrelated payload class for testing incompatible types"""
+
     unrelated_field: float
 
 
 class SubscriberForTesting(Subscriber[PayloadForTesting]):
     """Test subscriber implementation"""
-    
+
     def __init__(self):
         self.payload_type = PayloadForTesting
         self.received_events = []
         self.should_raise = False
-        
+
     async def on_event(self, event: QueueEvent[PayloadForTesting]) -> None:
         if self.should_raise:
             raise ValueError("Test error")
@@ -54,55 +58,55 @@ class SubscriberForTesting(Subscriber[PayloadForTesting]):
 
 class BasePayloadSubscriber(Subscriber[BasePayload]):
     """Subscriber for base payload type"""
-    
+
     def __init__(self):
         self.payload_type = BasePayload
         self.received_events = []
-        
+
     async def on_event(self, event: QueueEvent[BasePayload]) -> None:
         self.received_events.append(event)
 
 
 class DerivedPayloadSubscriber(Subscriber[DerivedPayload]):
     """Subscriber for derived payload type"""
-    
+
     def __init__(self):
         self.payload_type = DerivedPayload
         self.received_events = []
-        
+
     async def on_event(self, event: QueueEvent[DerivedPayload]) -> None:
         self.received_events.append(event)
 
 
 class UnrelatedPayloadSubscriber(Subscriber[UnrelatedPayload]):
     """Subscriber for unrelated payload type"""
-    
+
     def __init__(self):
         self.payload_type = UnrelatedPayload
         self.received_events = []
-        
+
     async def on_event(self, event: QueueEvent[UnrelatedPayload]) -> None:
         self.received_events.append(event)
 
 
 class SubscriberWithoutPayloadType(Subscriber[PayloadForTesting]):
     """Subscriber without payload_type attribute for testing validation"""
-    
+
     def __init__(self):
         self.received_events = []
         # Intentionally not setting payload_type
-        
+
     async def on_event(self, event: QueueEvent[PayloadForTesting]) -> None:
         self.received_events.append(event)
 
 
 class SubscriberWithNonePayloadType(Subscriber[PayloadForTesting]):
     """Subscriber with None payload_type for testing validation"""
-    
+
     def __init__(self):
         self.payload_type = None
         self.received_events = []
-        
+
     async def on_event(self, event: QueueEvent[PayloadForTesting]) -> None:
         self.received_events.append(event)
 
@@ -128,7 +132,7 @@ class TestMemoryEventQueue:
     def test_initialization_default_serializer(self):
         """Test MemoryEventQueue initialization with default serializer"""
         queue = MemoryEventQueue(event_type=PayloadForTesting)
-        
+
         assert queue.event_type == PayloadForTesting
         assert isinstance(queue.serializer, PickleSerializer)
         assert queue.events == []
@@ -138,8 +142,10 @@ class TestMemoryEventQueue:
     def test_initialization_custom_serializer(self):
         """Test MemoryEventQueue initialization with custom serializer"""
         custom_serializer = JsonSerializer()
-        queue = MemoryEventQueue(event_type=PayloadForTesting, serializer=custom_serializer)
-        
+        queue = MemoryEventQueue(
+            event_type=PayloadForTesting, serializer=custom_serializer
+        )
+
         assert queue.event_type == PayloadForTesting
         assert queue.serializer is custom_serializer
         assert queue.events == []
@@ -149,7 +155,7 @@ class TestMemoryEventQueue:
         """Test StoredEvent creation with default values"""
         payload_bytes = b"test payload"
         stored_event = StoredEvent(serialized_payload=payload_bytes)
-        
+
         assert stored_event.serialized_payload == payload_bytes
         assert stored_event.status == EventStatus.PROCESSING
         assert isinstance(stored_event.created_at, datetime)
@@ -162,9 +168,9 @@ class TestMemoryEventQueue:
         stored_event = StoredEvent(
             serialized_payload=payload_bytes,
             created_at=custom_time,
-            status=EventStatus.ERROR
+            status=EventStatus.ERROR,
         )
-        
+
         assert stored_event.serialized_payload == payload_bytes
         assert stored_event.created_at == custom_time
         assert stored_event.status == EventStatus.ERROR
@@ -173,7 +179,7 @@ class TestMemoryEventQueue:
     async def test_subscribe_single_subscriber(self, queue, subscriber):
         """Test subscribing a single subscriber"""
         subscriber_id = await queue.subscribe(subscriber)
-        
+
         assert isinstance(subscriber_id, UUID)
         assert subscriber_id in queue.subscribers
         assert queue.subscribers[subscriber_id] is subscriber
@@ -183,10 +189,10 @@ class TestMemoryEventQueue:
         """Test subscribing multiple subscribers"""
         subscriber1 = SubscriberForTesting()
         subscriber2 = SubscriberForTesting()
-        
+
         id1 = await queue.subscribe(subscriber1)
         id2 = await queue.subscribe(subscriber2)
-        
+
         assert id1 != id2
         assert len(queue.subscribers) == 2
         assert queue.subscribers[id1] is subscriber1
@@ -196,9 +202,9 @@ class TestMemoryEventQueue:
     async def test_unsubscribe_existing_subscriber(self, queue, subscriber):
         """Test unsubscribing an existing subscriber"""
         subscriber_id = await queue.subscribe(subscriber)
-        
+
         result = await queue.unsubscribe(subscriber_id)
-        
+
         assert result is True
         assert subscriber_id not in queue.subscribers
         assert len(queue.subscribers) == 0
@@ -207,10 +213,11 @@ class TestMemoryEventQueue:
     async def test_unsubscribe_nonexistent_subscriber(self, queue):
         """Test unsubscribing a non-existent subscriber"""
         from uuid import uuid4
+
         fake_id = uuid4()
-        
+
         result = await queue.unsubscribe(fake_id)
-        
+
         assert result is False
         assert len(queue.subscribers) == 0
 
@@ -218,7 +225,7 @@ class TestMemoryEventQueue:
     async def test_list_subscribers_empty(self, queue):
         """Test listing subscribers when there are none"""
         subscribers = await queue.list_subscribers()
-        
+
         assert isinstance(subscribers, dict)
         assert len(subscribers) == 0
 
@@ -226,9 +233,9 @@ class TestMemoryEventQueue:
     async def test_list_subscribers_single(self, queue, subscriber):
         """Test listing subscribers with a single subscriber"""
         subscriber_id = await queue.subscribe(subscriber)
-        
+
         subscribers = await queue.list_subscribers()
-        
+
         assert len(subscribers) == 1
         assert subscriber_id in subscribers
         assert subscribers[subscriber_id] is subscriber
@@ -239,13 +246,13 @@ class TestMemoryEventQueue:
         subscriber1 = SubscriberForTesting()
         subscriber2 = SubscriberForTesting()
         subscriber3 = SubscriberForTesting()
-        
+
         id1 = await queue.subscribe(subscriber1)
         id2 = await queue.subscribe(subscriber2)
         id3 = await queue.subscribe(subscriber3)
-        
+
         subscribers = await queue.list_subscribers()
-        
+
         assert len(subscribers) == 3
         assert id1 in subscribers
         assert id2 in subscribers
@@ -260,16 +267,16 @@ class TestMemoryEventQueue:
         subscriber1 = SubscriberForTesting()
         subscriber2 = SubscriberForTesting()
         subscriber3 = SubscriberForTesting()
-        
+
         id1 = await queue.subscribe(subscriber1)
         id2 = await queue.subscribe(subscriber2)
         id3 = await queue.subscribe(subscriber3)
-        
+
         # Unsubscribe the middle one
         await queue.unsubscribe(id2)
-        
+
         subscribers = await queue.list_subscribers()
-        
+
         assert len(subscribers) == 2
         assert id1 in subscribers
         assert id2 not in subscribers
@@ -281,12 +288,12 @@ class TestMemoryEventQueue:
     async def test_list_subscribers_returns_copy(self, queue, subscriber):
         """Test that list_subscribers returns a copy, not the original dict"""
         subscriber_id = await queue.subscribe(subscriber)
-        
+
         subscribers = await queue.list_subscribers()
-        
+
         # Modify the returned dict
         subscribers.clear()
-        
+
         # Original should be unchanged
         original_subscribers = await queue.list_subscribers()
         assert len(original_subscribers) == 1
@@ -296,27 +303,29 @@ class TestMemoryEventQueue:
     async def test_publish_single_event_no_subscribers(self, queue, payload):
         """Test publishing an event with no subscribers"""
         await queue.publish(payload)
-        
+
         assert len(queue.events) == 1
         stored_event = queue.events[0]
         assert stored_event.status == EventStatus.PROCESSING
         assert isinstance(stored_event.created_at, datetime)
-        
+
         # Verify payload can be deserialized correctly
         deserialized = queue.serializer.deserialize(stored_event.serialized_payload)
         assert deserialized.message == payload.message
         assert deserialized.value == payload.value
 
     @pytest.mark.asyncio
-    async def test_publish_single_event_with_subscriber(self, queue, payload, subscriber):
+    async def test_publish_single_event_with_subscriber(
+        self, queue, payload, subscriber
+    ):
         """Test publishing an event with a subscriber"""
         await queue.subscribe(subscriber)
-        
+
         await queue.publish(payload)
-        
+
         assert len(queue.events) == 1
         assert len(subscriber.received_events) == 1
-        
+
         received_event = subscriber.received_events[0]
         assert received_event.id == 1
         assert received_event.payload.message == payload.message
@@ -327,22 +336,22 @@ class TestMemoryEventQueue:
     async def test_publish_multiple_events(self, queue, subscriber):
         """Test publishing multiple events"""
         await queue.subscribe(subscriber)
-        
+
         payload1 = PayloadForTesting("message1", 1)
         payload2 = PayloadForTesting("message2", 2)
-        
+
         await queue.publish(payload1)
         await queue.publish(payload2)
-        
+
         assert len(queue.events) == 2
         assert len(subscriber.received_events) == 2
-        
+
         # Check first event
         event1 = subscriber.received_events[0]
         assert event1.id == 1
         assert event1.payload.message == "message1"
         assert event1.payload.value == 1
-        
+
         # Check second event
         event2 = subscriber.received_events[1]
         assert event2.id == 2
@@ -355,9 +364,9 @@ class TestMemoryEventQueue:
         subscriber = SubscriberForTesting()
         subscriber.should_raise = True
         await queue.subscribe(subscriber)
-        
+
         await queue.publish(payload)
-        
+
         assert len(queue.events) == 1
         stored_event = queue.events[0]
         assert stored_event.status == EventStatus.ERROR
@@ -368,16 +377,16 @@ class TestMemoryEventQueue:
         good_subscriber = SubscriberForTesting()
         bad_subscriber = SubscriberForTesting()
         bad_subscriber.should_raise = True
-        
+
         await queue.subscribe(good_subscriber)
         await queue.subscribe(bad_subscriber)
-        
+
         await queue.publish(payload)
-        
+
         assert len(queue.events) == 1
         stored_event = queue.events[0]
         assert stored_event.status == EventStatus.ERROR
-        
+
         # Good subscriber should still receive the event
         assert len(good_subscriber.received_events) == 1
         assert len(bad_subscriber.received_events) == 0
@@ -386,9 +395,9 @@ class TestMemoryEventQueue:
     async def test_get_event_by_id(self, queue, payload):
         """Test retrieving a specific event by ID"""
         await queue.publish(payload)
-        
+
         event = await queue.get_event(1)
-        
+
         assert event.id == 1
         assert event.payload.message == payload.message
         assert event.payload.value == payload.value
@@ -404,7 +413,7 @@ class TestMemoryEventQueue:
     async def test_get_events_empty_queue(self, queue):
         """Test getting events from empty queue"""
         page = await queue.search_events()
-        
+
         assert page.items == []
         assert page.next_page_id is None
 
@@ -412,12 +421,12 @@ class TestMemoryEventQueue:
     async def test_get_events_single_event(self, queue, payload):
         """Test getting events with single event"""
         await queue.publish(payload)
-        
+
         page = await queue.search_events()
-        
+
         assert len(page.items) == 1
         assert page.next_page_id is None
-        
+
         event = page.items[0]
         assert event.id == 1
         assert event.payload.message == payload.message
@@ -426,15 +435,15 @@ class TestMemoryEventQueue:
     async def test_get_events_multiple_events(self, queue):
         """Test getting multiple events"""
         payloads = [PayloadForTesting(f"message{i}", i) for i in range(5)]
-        
+
         for payload in payloads:
             await queue.publish(payload)
-        
+
         page = await queue.search_events()
-        
+
         assert len(page.items) == 5
         assert page.next_page_id is None
-        
+
         # Events should be in reverse order (newest first)
         for i, event in enumerate(page.items):
             expected_id = 5 - i
@@ -445,15 +454,15 @@ class TestMemoryEventQueue:
     async def test_get_events_with_limit(self, queue):
         """Test getting events with limit"""
         payloads = [PayloadForTesting(f"message{i}", i) for i in range(5)]
-        
+
         for payload in payloads:
             await queue.publish(payload)
-        
+
         page = await queue.search_events(limit=3)
-        
+
         assert len(page.items) == 3
         assert page.next_page_id == "3"
-        
+
         # Should get the 3 newest events
         assert page.items[0].id == 5
         assert page.items[1].id == 4
@@ -463,24 +472,24 @@ class TestMemoryEventQueue:
     async def test_get_events_pagination(self, queue):
         """Test event pagination"""
         payloads = [PayloadForTesting(f"message{i}", i) for i in range(5)]
-        
+
         for payload in payloads:
             await queue.publish(payload)
-        
+
         # Get first page
         page1 = await queue.search_events(limit=2)
         assert len(page1.items) == 2
         assert page1.next_page_id == "2"
         assert page1.items[0].id == 5
         assert page1.items[1].id == 4
-        
+
         # Get second page
         page2 = await queue.search_events(page_id=page1.next_page_id, limit=2)
         assert len(page2.items) == 2
         assert page2.next_page_id == "4"
         assert page2.items[0].id == 3
         assert page2.items[1].id == 2
-        
+
         # Get final page
         page3 = await queue.search_events(page_id=page2.next_page_id, limit=2)
         assert len(page3.items) == 1
@@ -494,22 +503,22 @@ class TestMemoryEventQueue:
         good_subscriber = SubscriberForTesting()
         bad_subscriber = SubscriberForTesting()
         bad_subscriber.should_raise = True
-        
+
         await queue.subscribe(good_subscriber)
-        
+
         # This will have PROCESSING status
         await queue.publish(PayloadForTesting("good", 1))
-        
+
         await queue.subscribe(bad_subscriber)
-        
+
         # This will have ERROR status
         await queue.publish(PayloadForTesting("bad", 2))
-        
+
         # Filter for PROCESSING events
         processing_page = await queue.search_events(status__eq=EventStatus.PROCESSING)
         assert len(processing_page.items) == 1
         assert processing_page.items[0].payload.message == "good"
-        
+
         # Filter for ERROR events
         error_page = await queue.search_events(status__eq=EventStatus.ERROR)
         assert len(error_page.items) == 1
@@ -519,29 +528,29 @@ class TestMemoryEventQueue:
     async def test_get_events_filter_by_created_at(self, queue):
         """Test filtering events by creation time"""
         base_time = datetime.now(UTC)
-        
+
         # Manually create events with specific timestamps
         payload1 = PayloadForTesting("old", 1)
         payload2 = PayloadForTesting("new", 2)
-        
+
         await queue.publish(payload1)
         await queue.publish(payload2)
-        
+
         # Modify timestamps manually for testing
         queue.events[0].created_at = base_time - timedelta(hours=2)
         queue.events[1].created_at = base_time - timedelta(hours=1)
-        
+
         # Filter events created after 1.5 hours ago
         min_time = base_time - timedelta(hours=1, minutes=30)
         page = await queue.search_events(created_at__min=min_time)
-        
+
         assert len(page.items) == 1
         assert page.items[0].payload.message == "new"
-        
+
         # Filter events created before 1.5 hours ago
         max_time = base_time - timedelta(hours=1, minutes=30)
         page = await queue.search_events(created_at__max=max_time)
-        
+
         assert len(page.items) == 1
         assert page.items[0].payload.message == "old"
 
@@ -555,10 +564,10 @@ class TestMemoryEventQueue:
     async def test_count_events_with_events(self, queue):
         """Test counting events with multiple events"""
         payloads = [PayloadForTesting(f"message{i}", i) for i in range(3)]
-        
+
         for payload in payloads:
             await queue.publish(payload)
-        
+
         count = await queue.count_events()
         assert count == 3
 
@@ -568,16 +577,16 @@ class TestMemoryEventQueue:
         good_subscriber = SubscriberForTesting()
         bad_subscriber = SubscriberForTesting()
         bad_subscriber.should_raise = True
-        
+
         await queue.subscribe(good_subscriber)
         await queue.publish(PayloadForTesting("good", 1))
-        
+
         await queue.subscribe(bad_subscriber)
         await queue.publish(PayloadForTesting("bad", 2))
-        
+
         processing_count = await queue.count_events(status__eq=EventStatus.PROCESSING)
         assert processing_count == 1
-        
+
         error_count = await queue.count_events(status__eq=EventStatus.ERROR)
         assert error_count == 1
 
@@ -585,19 +594,19 @@ class TestMemoryEventQueue:
     async def test_count_events_with_time_filter(self, queue):
         """Test counting events with time filter"""
         base_time = datetime.now(UTC)
-        
+
         await queue.publish(PayloadForTesting("old", 1))
         await queue.publish(PayloadForTesting("new", 2))
-        
+
         # Modify timestamps
         queue.events[0].created_at = base_time - timedelta(hours=2)
         queue.events[1].created_at = base_time - timedelta(hours=1)
-        
+
         # Count events created after 1.5 hours ago
         min_time = base_time - timedelta(hours=1, minutes=30)
         count = await queue.count_events(created_at__min=min_time)
         assert count == 1
-        
+
         # Count events created before 1.5 hours ago
         max_time = base_time - timedelta(hours=1, minutes=30)
         count = await queue.count_events(created_at__max=max_time)
@@ -608,12 +617,11 @@ class TestMemoryEventQueue:
         """Test internal _reconstruct_event method"""
         serialized = queue.serializer.serialize(payload)
         stored_event = StoredEvent(
-            serialized_payload=serialized,
-            status=EventStatus.PROCESSED
+            serialized_payload=serialized, status=EventStatus.PROCESSED
         )
-        
+
         reconstructed = queue._reconstruct_event(42, stored_event)
-        
+
         assert reconstructed.id == 42
         assert reconstructed.status == EventStatus.PROCESSED
         assert reconstructed.payload.message == payload.message
@@ -625,18 +633,20 @@ class TestMemoryEventQueue:
         """Test concurrent publishing of events"""
         subscriber = SubscriberForTesting()
         await queue.subscribe(subscriber)
-        
+
         # Create multiple concurrent publish tasks
         payloads = [PayloadForTesting(f"concurrent{i}", i) for i in range(10)]
         tasks = [queue.publish(payload) for payload in payloads]
-        
+
         await asyncio.gather(*tasks)
-        
+
         assert len(queue.events) == 10
         assert len(subscriber.received_events) == 10
-        
+
         # Verify all events were stored correctly
-        received_messages = {event.payload.message for event in subscriber.received_events}
+        received_messages = {
+            event.payload.message for event in subscriber.received_events
+        }
         expected_messages = {f"concurrent{i}" for i in range(10)}
         assert received_messages == expected_messages
 
@@ -644,18 +654,18 @@ class TestMemoryEventQueue:
     async def test_concurrent_subscribe_unsubscribe(self, queue):
         """Test concurrent subscribe/unsubscribe operations"""
         subscribers = [SubscriberForTesting() for _ in range(5)]
-        
+
         # Subscribe all concurrently
         subscribe_tasks = [queue.subscribe(sub) for sub in subscribers]
         subscriber_ids = await asyncio.gather(*subscribe_tasks)
-        
+
         assert len(queue.subscribers) == 5
         assert len(set(subscriber_ids)) == 5  # All IDs should be unique
-        
+
         # Unsubscribe all concurrently
         unsubscribe_tasks = [queue.unsubscribe(sid) for sid in subscriber_ids]
         results = await asyncio.gather(*unsubscribe_tasks)
-        
+
         assert all(results)  # All should return True
         assert len(queue.subscribers) == 0
 
@@ -664,16 +674,16 @@ class TestMemoryEventQueue:
         """Test get_events handles corrupted serialized data gracefully"""
         # Add a valid event first
         await queue.publish(PayloadForTesting("valid", 1))
-        
+
         # Manually add corrupted data
         corrupted_event = StoredEvent(serialized_payload=b"corrupted data")
         queue.events.append(corrupted_event)
-        
+
         # Add another valid event
         await queue.publish(PayloadForTesting("valid2", 2))
-        
+
         page = await queue.search_events()
-        
+
         # Should only return the valid events, skipping corrupted one
         assert len(page.items) == 2
         assert page.items[0].payload.message == "valid2"
@@ -683,10 +693,10 @@ class TestMemoryEventQueue:
     async def test_invalid_page_id(self, queue):
         """Test get_events with invalid page_id"""
         await queue.publish(PayloadForTesting("test", 1))
-        
+
         # Test with invalid page_id - should default to 0
         page = await queue.search_events(page_id="invalid")
-        
+
         assert len(page.items) == 1
         assert page.items[0].payload.message == "test"
 
@@ -695,12 +705,12 @@ class TestMemoryEventQueue:
         """Test MemoryEventQueue with JsonSerializer"""
         json_serializer = JsonSerializer()
         queue = MemoryEventQueue(event_type=dict, serializer=json_serializer)
-        
+
         payload = {"message": "test", "value": 42}
         await queue.publish(payload)
-        
+
         assert len(queue.events) == 1
-        
+
         # Retrieve and verify
         event = await queue.get_event(1)
         assert event.payload == payload
@@ -709,9 +719,9 @@ class TestMemoryEventQueue:
     async def test_edge_case_zero_limit(self, queue):
         """Test get_events with zero limit (defaults to 100)"""
         await queue.publish(PayloadForTesting("test", 1))
-        
+
         page = await queue.search_events(limit=0)
-        
+
         # Zero limit defaults to 100, so should return the event
         assert len(page.items) == 1
         assert page.next_page_id is None
@@ -722,9 +732,9 @@ class TestMemoryEventQueue:
         payloads = [PayloadForTesting(f"message{i}", i) for i in range(3)]
         for payload in payloads:
             await queue.publish(payload)
-        
+
         page = await queue.search_events(limit=-1)
-        
+
         # Negative limit is used as-is, so start_index + (-1) = start_index - 1
         # This results in slicing from 0 to -1, which gives all but the last element
         assert len(page.items) == 2
@@ -733,9 +743,9 @@ class TestMemoryEventQueue:
     async def test_large_page_id(self, queue):
         """Test get_events with page_id larger than available events"""
         await queue.publish(PayloadForTesting("test", 1))
-        
+
         page = await queue.search_events(page_id="1000")
-        
+
         assert len(page.items) == 0
         assert page.next_page_id is None
 
@@ -744,11 +754,11 @@ class TestMemoryEventQueue:
     async def test_subscribe_compatible_same_type(self, queue):
         """Test subscribing with same payload type as queue"""
         subscriber = SubscriberForTesting()
-        
+
         # Should succeed - same type
         subscriber_id = await queue.subscribe(subscriber)
         assert subscriber_id is not None
-        
+
         subscribers = await queue.list_subscribers()
         assert len(subscribers) == 1
         assert subscriber_id in subscribers
@@ -759,11 +769,11 @@ class TestMemoryEventQueue:
         # Queue for derived type, subscriber for base type - should work
         queue = MemoryEventQueue(event_type=DerivedPayload)
         subscriber = BasePayloadSubscriber()
-        
+
         # Should succeed - DerivedPayload is subclass of BasePayload
         subscriber_id = await queue.subscribe(subscriber)
         assert subscriber_id is not None
-        
+
         subscribers = await queue.list_subscribers()
         assert len(subscribers) == 1
         assert subscriber_id in subscribers
@@ -774,11 +784,11 @@ class TestMemoryEventQueue:
         # Queue for base type, subscriber for derived type - should fail
         queue = MemoryEventQueue(event_type=BasePayload)
         subscriber = DerivedPayloadSubscriber()
-        
+
         # Should fail - BasePayload is not subclass of DerivedPayload
         with pytest.raises(TypeError) as exc_info:
             await queue.subscribe(subscriber)
-        
+
         assert "is not compatible" in str(exc_info.value)
         assert "BasePayload" in str(exc_info.value)
         assert "DerivedPayload" in str(exc_info.value)
@@ -787,11 +797,11 @@ class TestMemoryEventQueue:
     async def test_subscribe_incompatible_unrelated_type(self, queue):
         """Test subscribing with unrelated payload type fails"""
         subscriber = UnrelatedPayloadSubscriber()
-        
+
         # Should fail - UnrelatedPayload is not related to PayloadForTesting
         with pytest.raises(TypeError) as exc_info:
             await queue.subscribe(subscriber)
-        
+
         assert "is not compatible" in str(exc_info.value)
         assert "PayloadForTesting" in str(exc_info.value)
         assert "UnrelatedPayload" in str(exc_info.value)
@@ -800,20 +810,20 @@ class TestMemoryEventQueue:
     async def test_subscribe_missing_payload_type(self, queue):
         """Test subscribing with missing payload_type attribute fails"""
         subscriber = SubscriberWithoutPayloadType()
-        
+
         # Should fail - no payload_type attribute
         with pytest.raises(TypeError) as exc_info:
             await queue.subscribe(subscriber)
-        
+
         assert "must have a payload_type attribute" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_subscribe_none_payload_type(self, queue):
         """Test subscribing with None payload_type fails"""
         subscriber = SubscriberWithNonePayloadType()
-        
+
         # Should fail - payload_type is None
         with pytest.raises(TypeError) as exc_info:
             await queue.subscribe(subscriber)
-        
+
         assert "must have a payload_type attribute" in str(exc_info.value)

@@ -1,4 +1,3 @@
-
 import asyncio
 from dataclasses import dataclass
 import logging
@@ -17,6 +16,7 @@ class FilesystemWorkerRegistry:
     Class for tracking concurrent workers using the file system. Each worker periodically
     writes a file indicating it is alive
     """
+
     worker_id: UUID
     worker_dir: Path
     accepting_events: bool = True
@@ -54,21 +54,30 @@ class FilesystemWorkerRegistry:
             _LOGGER.info("worker_registry_stopped")
 
     def _add_status(self):
-        status_file = self.worker_dir / f"{self.worker_id.hex}-{int(time.time())}-{self.accepting_events}"
+        status_file = (
+            self.worker_dir
+            / f"{self.worker_id.hex}-{int(time.time())}-{self.accepting_events}"
+        )
         status_file.touch()
 
     def _get_worker_statuses(self) -> list[FilesystemWorkerStatus]:
         statuses = []
         for status_file in self.worker_dir.iterdir():
             try:
-                id, timestamp, accepting_events = status_file.name.split('-')
-                statuses.append(FilesystemWorkerStatus(
-                    id=UUID(id),
-                    timestamp=int(timestamp),
-                    accepting_events=accepting_events == "1",
-                ))
+                id, timestamp, accepting_events = status_file.name.split("-")
+                statuses.append(
+                    FilesystemWorkerStatus(
+                        id=UUID(id),
+                        timestamp=int(timestamp),
+                        accepting_events=accepting_events == "1",
+                    )
+                )
             except Exception:
-                _LOGGER.error(f'error_getting_worker_status:{status_file}', exc_info=True, stack_info=True)
+                _LOGGER.error(
+                    f"error_getting_worker_status:{status_file}",
+                    exc_info=True,
+                    stack_info=True,
+                )
         return statuses
 
     def _refresh_worker_ids(self) -> None:
@@ -86,7 +95,11 @@ class FilesystemWorkerRegistry:
                 try:
                     status_file.unlink()
                 except Exception:
-                    _LOGGER.error(f'error_removing_ping:{status_file}', exc_info=True, stack_info=True)
+                    _LOGGER.error(
+                        f"error_removing_ping:{status_file}",
+                        exc_info=True,
+                        stack_info=True,
+                    )
             elif status.timestamp >= active_threshold:
                 existing = worker_statuses.get(status.worker_id)
                 if not existing or status.timestamp > existing.timestamp:

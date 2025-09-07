@@ -1,4 +1,3 @@
-
 import asyncio
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -15,7 +14,7 @@ from eventy.fs.filesystem_page import FilesystemPage
 from eventy.queue_event import QueueEvent
 from eventy.serializers.serializer import Serializer, get_default_serializer
 
-T = TypeVar('T')
+T = TypeVar("T")
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -28,9 +27,7 @@ class FilesystemEventStore(Generic[T]):
     max_events_per_page: int = 25
     max_page_size_bytes: int = 1024 * 1024  # 1MB
 
-    payload_serializer: Serializer[T] = field(
-        default_factory=get_default_serializer
-    )
+    payload_serializer: Serializer[T] = field(default_factory=get_default_serializer)
     page_serializer: Serializer[FilesystemPage[T]] = field(
         default_factory=get_default_serializer
     )
@@ -76,9 +73,7 @@ class FilesystemEventStore(Generic[T]):
 
             return event_id, meta
 
-    def iter_events_from(
-        self, current_event_id: int
-    ) -> Iterator[QueueEvent[T]]:
+    def iter_events_from(self, current_event_id: int) -> Iterator[QueueEvent[T]]:
         page_indexes = self._get_page_indexes()
         if page_indexes:
             first_id_in_next_page = page_indexes[0][1]
@@ -109,10 +104,10 @@ class FilesystemEventStore(Generic[T]):
             status=meta.status,
             created_at=meta.created_at,
         )
-    
+
     def update_event_status(self, event_id: int, status: EventStatus):
         if status == EventStatus.PENDING:
-            return # Cant go back to pending
+            return  # Cant go back to pending
         meta = self._get_meta(event_id)
         if meta.status == status:
             return
@@ -125,17 +120,20 @@ class FilesystemEventStore(Generic[T]):
 
     def _get_page_indexes(self) -> list[tuple[int, int]]:
         page_indexes = [
-            tuple(int(i) for i in page.name.split("-")) for page in self.page_dir.iterdir()
+            tuple(int(i) for i in page.name.split("-"))
+            for page in self.page_dir.iterdir()
         ]
         page_indexes.sort(key=lambda n: n[0], reverse=True)
         return page_indexes
-    
+
     def _get_all_event_ids(self) -> Iterator[int]:
         for file in self.payload_dir.iterdir():
             try:
                 yield int(file.name)
             except Exception:
-                _LOGGER.error('error_calculating_next_page', exc_info=True, stack_info=True)
+                _LOGGER.error(
+                    "error_calculating_next_page", exc_info=True, stack_info=True
+                )
 
     async def _run_in_bg(self):
         try:
@@ -144,7 +142,6 @@ class FilesystemEventStore(Generic[T]):
                 await asyncio.sleep(self.bg_task_delay)
         except asyncio.CancelledError:
             _LOGGER.info("file_system_event_queue_suspended")
-
 
     async def _maybe_build_page(self) -> None:
         page_indexes = self._get_page_indexes()

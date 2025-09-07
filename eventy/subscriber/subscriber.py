@@ -23,8 +23,10 @@ class Subscriber(Generic[T], ABC):
     async def on_event(self, event: QueueEvent[T]) -> None:
         """Callback for when an event occurs"""
 
-    async def on_worker_event(self, event: QueueEvent[T], current_worker_id: UUID, primary_worker_id: UUID) -> None:
-        """ 
+    async def on_worker_event(
+        self, event: QueueEvent[T], current_worker_id: UUID, primary_worker_id: UUID
+    ) -> None:
+        """
         By default, run the callback only if the current worker matches the primary_worker_id worker.
         Other implementations may vary (e.g.: checking against a predefined worker id, or always executing
         the subscriber no matter the assigned worker)

@@ -1,6 +1,3 @@
-
-
-
 import asyncio
 from dataclasses import dataclass
 import json
@@ -17,7 +14,7 @@ from eventy.fs.filesystem_worker_registry import FilesystemWorkerRegistry
 from eventy.queue_event import QueueEvent
 
 _LOGGER = logging.getLogger(__name__)
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 @dataclass
@@ -43,14 +40,16 @@ class FilesystemEventCoordinator(Generic[T]):
 
     def schedule_event_for_processing(self, event_id: int) -> FilesystemProcessMeta:
         # Write the process file containing the id of all assigned workers and the primary
-        worker_ids = [worker_id.hex for worker_id in self.worker_registry.worker_statuses]
+        worker_ids = [
+            worker_id.hex for worker_id in self.worker_registry.worker_statuses
+        ]
         primary_worker_id = random.choice(worker_ids)
         process_file = self.process_dir / str(event_id)
         event_process = FilesystemProcessMeta(
             primary_worker_id=primary_worker_id,
             worker_ids=worker_ids,
         )
-        with open(process_file, 'x') as f:
+        with open(process_file, "x") as f:
             json.dump(event_process.to_json(), f)
 
         # Place a file so each worker knows to pick up the event
@@ -65,11 +64,17 @@ class FilesystemEventCoordinator(Generic[T]):
             try:
                 event_ids.append(UUID(event_file.name))
             except Exception:
-                _LOGGER.error('get_event_ids_to_process_for_current_worker', exc_info=True, stack_info=True)
+                _LOGGER.error(
+                    "get_event_ids_to_process_for_current_worker",
+                    exc_info=True,
+                    stack_info=True,
+                )
         return event_ids
-    
+
     def mark_event_processed_for_current_worker(self, event_id: int) -> None:
-        worker_event_file = self.worker_event_dir / self.worker_registry.worker_id.hex / str(event_id)
+        worker_event_file = (
+            self.worker_event_dir / self.worker_registry.worker_id.hex / str(event_id)
+        )
         worker_event_file.unlink(missing_ok=True)
 
     def get_all_process_meta(self) -> Iterator[Tuple[int, FilesystemProcessMeta]]:
@@ -79,7 +84,11 @@ class FilesystemEventCoordinator(Generic[T]):
                     process_meta = from_json(json.load(f))
                     yield int(process_file.name), process_meta
             except Exception:
-                _LOGGER.error(f'get_all_process_meta:{process_file}', exc_info=True, stack_info=True)
+                _LOGGER.error(
+                    f"get_all_process_meta:{process_file}",
+                    exc_info=True,
+                    stack_info=True,
+                )
 
     def get_status(self, event_id: int, meta: FilesystemProcessMeta) -> EventStatus:
         result = EventStatus.PROCESSED
@@ -96,11 +105,11 @@ class FilesystemEventCoordinator(Generic[T]):
                 return EventStatus.PROCESSING
 
         return result
-    
+
     def unscheduled_event(self, event_id: int) -> None:
         process_file = self.process_dir / str(event_id)
         process_file.unlink(missing_ok=True)
-    
+
     def cleanup(self) -> None:
         for event_id, meta in self.get_all_process_meta():
             status = self.get_status(event_id, meta)

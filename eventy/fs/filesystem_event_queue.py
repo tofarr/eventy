@@ -49,11 +49,11 @@ class FilesystemEventQueue(EventQueue[T]):
     subscriber_dir: Path | None = None
 
     _subscriber_task: asyncio.Task | None = None
-    
+
     def __post_init__(self) -> None:
         """Initialize directory structure"""
         self.root_dir.mkdir(parents=True, exist_ok=True)
-        
+
         if self.worker_registry is None:
             self.worker_registry = FilesystemWorkerRegistry(
                 id=uuid4(),
@@ -71,13 +71,13 @@ class FilesystemEventQueue(EventQueue[T]):
             self.event_coordinator = FilesystemEventCoordinator(
                 worker_registry=self.worker_registry,
                 process_dir=self.root_dir / "process",
-                worker_event_dir=self.root_dir / "worker_event"
+                worker_event_dir=self.root_dir / "worker_event",
             )
 
         if self.subscriber_dir is None:
             self.subscriber_dir = self.root_dir / "subscriber"
         self.subscriber_dir.mkdir()
-        
+
         self._load_subscribers_from_disk()
 
     def _load_subscribers_from_disk(self) -> None:
@@ -109,26 +109,28 @@ class FilesystemEventQueue(EventQueue[T]):
         """Subscribe to events
 
         Args:
-            subscriber: The subscriber to add. Its payload_type must be the same as or a superclass 
+            subscriber: The subscriber to add. Its payload_type must be the same as or a superclass
                        of the queue's event_type.
 
         Returns:
             UUID: A unique identifier for the subscriber that can be used to unsubscribe
-            
+
         Raises:
             TypeError: If the subscriber's payload_type is not compatible with the queue's event_type
         """
         # Validate that subscriber's payload_type is compatible with queue's event_type
-        if not hasattr(subscriber, 'payload_type') or subscriber.payload_type is None:
-            raise TypeError(f"Subscriber {subscriber} must have a payload_type attribute")
-        
+        if not hasattr(subscriber, "payload_type") or subscriber.payload_type is None:
+            raise TypeError(
+                f"Subscriber {subscriber} must have a payload_type attribute"
+            )
+
         if not issubclass(self.event_type, subscriber.payload_type):
             raise TypeError(
                 f"Subscriber payload_type {subscriber.payload_type.__name__} is not compatible "
                 f"with queue event_type {self.event_type.__name__}. The queue's event_type must "
                 f"be the same as or a subclass of the subscriber's payload_type."
             )
-        
+
         subscriber_id = uuid4()
         self.subscribers[subscriber_id] = subscriber
 
@@ -249,22 +251,32 @@ class FilesystemEventQueue(EventQueue[T]):
     async def _run_subscribers(self):
         try:
             while True:
-                for event_id in self.event_coordinator.get_event_ids_to_process_for_current_worker():
+                for (
+                    event_id
+                ) in (
+                    self.event_coordinator.get_event_ids_to_process_for_current_worker()
+                ):
                     event = self.event_store.get_event(event_id)
                     if event.status == EventStatus.PENDING:
                         self.event_store.update_event_status(EventStatus.PROCESSING)
-                    
+
                     for subscriber in list(self.subscribers.values()):
                         try:
-                            subscriber.on_worker_event(event, self.worker_registry.worker_id)
+                            subscriber.on_worker_event(
+                                event, self.worker_registry.worker_id
+                            )
                             await subscriber.on_event(event)
                         except Exception:
-                            self.event_store.update_event_status(event_id, EventStatus.ERROR)
+                            self.event_store.update_event_status(
+                                event_id, EventStatus.ERROR
+                            )
                             _LOGGER.error(
                                 "subscriber_error", exc_info=True, stack_info=True
                             )
 
-                    self.event_coordinator.mark_event_processed_for_current_worker(event_id)
+                    self.event_coordinator.mark_event_processed_for_current_worker(
+                        event_id
+                    )
                     status = self.event_coordinator.get_status(event_id)
                     if status == EventStatus.PROCESSING:
                         continue

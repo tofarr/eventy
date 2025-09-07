@@ -1,19 +1,16 @@
-
-
-
 from abc import ABC
 from eventy.subscriber.subscriber import Subscriber
 from eventy.util import get_impl
 
 
 class EventyConfig(ABC):
-    """ Configuration object for eventy """
+    """Configuration object for eventy"""
 
     def get_subscriber_types(self) -> list[type[Subscriber]]:
-        """ Get subscriber types """
+        """Get subscriber types"""
 
     def get_payload_types(self) -> list[type]:
-        """ Get all payload types """
+        """Get all payload types"""
 
 
 def get_config() -> EventyConfig:

@@ -13,7 +13,8 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class EventQueue(Generic[T], ABC):
-    """ Event queue for distributed processing """
+    """Event queue for distributed processing"""
+
     worker_id: UUID
     """ Identifier for current worker """
     event_type: type[T]
@@ -127,7 +128,7 @@ class EventQueue(Generic[T], ABC):
                 event = await self.get_event(event_id)
                 events.append(event)
             except Exception:
-                _LOGGER.warning('error_getting_event', exc_info=True, stack_info=True)
+                _LOGGER.warning("error_getting_event", exc_info=True, stack_info=True)
                 events.append(None)
 
         return events
