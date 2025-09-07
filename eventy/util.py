@@ -32,9 +32,11 @@ def import_from(qual_name: str):
     return result
 
 
-def get_impl(key: str, base_type: type[T], default_type: type) -> type[T]:
+def get_impl(key: str, base_type: type[T], default_type: type | None = None) -> type[T]:
     value = os.getenv(key)
     if not value:
+        if default_type is None:
+            raise ValueError('no_default_type')
         assert issubclass(default_type, base_type)
         return default_type
     imported_type = import_from(value)
