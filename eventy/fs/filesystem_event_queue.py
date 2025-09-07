@@ -157,13 +157,13 @@ class FilesystemEventQueue(EventQueue[T]):
         page_indexes.sort(key=lambda n: n[0], reverse=True)
         return page_indexes
 
-    def _iter_events_from(self, current_event_id: int) -> Iterator[QueueEvent[T]]:
+    async def _iter_events_from(self, current_event_id: int) -> AsyncIterator[QueueEvent[T]]:
         page_indexes = self._get_page_indexes()
         if page_indexes:
             first_id_in_next_page = page_indexes[0][1]
             while current_event_id >= first_id_in_next_page:
-                # Note: This is a synchronous method, so we need to handle this differently
-                # For now, we'll skip individual event files and rely on pages
+                event = await self.get_event(current_event_id)
+                yield event
                 current_event_id -= 1
 
         for start, end in page_indexes:
@@ -189,7 +189,7 @@ class FilesystemEventQueue(EventQueue[T]):
 
         items = []
         next_page_id = None
-        for event in self._iter_events_from(current_event_id):
+        async for event in self._iter_events_from(current_event_id):
             if created_at__min and event.created_at < created_at__min:
                 continue
             if created_at__max and event.created_at > created_at__max:
@@ -202,23 +202,6 @@ class FilesystemEventQueue(EventQueue[T]):
             items.append(event)
 
         return Page(items=items, next_page_id=next_page_id)
-
-    def iter_events(
-        self,
-        created_at__min: Optional[datetime] = None,
-        created_at__max: Optional[datetime] = None,
-        status__eq: Optional[EventStatus] = None,
-    ) -> Iterator[QueueEvent[T]]:
-        """Iterate over events matching the criteria"""
-        current_event_id = self._next_event_id
-        for event in self._iter_events_from(current_event_id):
-            if created_at__min and event.created_at < created_at__min:
-                continue
-            if created_at__max and event.created_at > created_at__max:
-                continue
-            if status__eq and event.status != status__eq:
-                continue
-            yield event
 
     async def count_events(
         self,
