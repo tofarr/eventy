@@ -17,6 +17,7 @@ _LOGGER = logging.getLogger(__name__)
 @dataclass
 class StoredEvent:
     """Internal representation of a stored event with metadata and serialized payload"""
+
     serialized_payload: bytes
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     status: EventStatus = EventStatus.PROCESSING
@@ -35,14 +36,16 @@ class MemoryEventQueue(EventQueue[T]):
     subscribers: list[Subscriber[T]] = field(default_factory=list)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
-    def _reconstruct_event(self, event_id: int, stored_event: StoredEvent) -> QueueEvent[T]:
+    def _reconstruct_event(
+        self, event_id: int, stored_event: StoredEvent
+    ) -> QueueEvent[T]:
         """Reconstruct a QueueEvent from a StoredEvent"""
         try:
             payload = self.serializer.deserialize(stored_event.serialized_payload)
             return QueueEvent(
-                id=event_id, 
+                id=event_id,
                 status=stored_event.status,
-                payload=payload, 
+                payload=payload,
                 created_at=stored_event.created_at,
             )
         except Exception:
@@ -63,7 +66,7 @@ class MemoryEventQueue(EventQueue[T]):
 
             # Serialize only the payload before storing to prevent mutations
             serialized_payload = self.serializer.serialize(payload)
-            
+
             stored_event = StoredEvent(
                 serialized_payload=serialized_payload,
             )

@@ -7,7 +7,7 @@ T = TypeVar("T")
 
 
 class Serializer(Generic[T], ABC):
-    """ Abstract serializer for converting objects to/from bytes for storage """
+    """Abstract serializer for converting objects to/from bytes for storage"""
 
     is_json: bool
     """ Flag determining whether this serializer outputs json """

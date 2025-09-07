@@ -16,4 +16,3 @@ class QueueEvent(Generic[T], ABC):
     payload: T
     status: EventStatus = field(default=EventStatus.PENDING)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    
