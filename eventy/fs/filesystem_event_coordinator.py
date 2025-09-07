@@ -40,9 +40,11 @@ class FilesystemEventCoordinator(Generic[T]):
 
     def schedule_event_for_processing(self, event_id: int) -> FilesystemProcessMeta:
         # Write the process file containing the id of all assigned workers and the primary
-        worker_ids = [
-            worker_id.hex for worker_id in self.worker_registry.worker_statuses
-        ]
+        worker_statuses = self.worker_registry.worker_statuses or {}
+        worker_ids = list(worker_statuses.keys())
+        # If no workers are available, use the current worker as fallback
+        if not worker_ids:
+            worker_ids = [self.worker_registry.worker_id]
         primary_worker_id = random.choice(worker_ids)
         process_file = self.process_dir / str(event_id)
         event_process = FilesystemProcessMeta(
@@ -54,28 +56,36 @@ class FilesystemEventCoordinator(Generic[T]):
 
         # Place a file so each worker knows to pick up the event
         for worker_id in worker_ids:
-            worker_event_file = self.worker_event_dir / worker_id / str(event_id)
+            worker_event_file = self.worker_event_dir / worker_id.hex / str(event_id)
+            worker_event_file.parent.mkdir(parents=True, exist_ok=True)
             worker_event_file.touch()
 
-    def get_event_ids_to_process_for_current_worker(self) -> set[UUID]:
+    def get_event_ids_to_process_for_current_worker(self) -> set[int]:
         event_ids = []
         worker_event_dir = self.worker_event_dir / self.worker_registry.worker_id.hex
-        for event_file in worker_event_dir.iterdir():
-            try:
-                event_ids.append(UUID(event_file.name))
-            except Exception:
-                _LOGGER.error(
-                    "get_event_ids_to_process_for_current_worker",
-                    exc_info=True,
-                    stack_info=True,
-                )
-        return event_ids
+        if worker_event_dir.exists():
+            for event_file in worker_event_dir.iterdir():
+                try:
+                    event_ids.append(int(event_file.name))
+                except Exception:
+                    _LOGGER.error(
+                        "get_event_ids_to_process_for_current_worker",
+                        exc_info=True,
+                        stack_info=True,
+                    )
+        return set(event_ids)
 
     def mark_event_processed_for_current_worker(self, event_id: int) -> None:
         worker_event_file = (
             self.worker_event_dir / self.worker_registry.worker_id.hex / str(event_id)
         )
         worker_event_file.unlink(missing_ok=True)
+
+    def get_process_meta(self, event_id: int) -> FilesystemProcessMeta:
+        """Get process metadata for a specific event"""
+        process_file = self.process_dir / str(event_id)
+        with open(process_file) as f:
+            return from_json(json.load(f))
 
     def get_all_process_meta(self) -> Iterator[Tuple[int, FilesystemProcessMeta]]:
         for process_file in self.process_dir.iterdir():

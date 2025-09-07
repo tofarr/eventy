@@ -43,7 +43,7 @@ class FilesystemEventStore(Generic[T]):
 
     async def __aenter__(self):
         if self._bg_task is None:
-            self._bg_task = asyncio.create_task(self._run_bg_task())
+            self._bg_task = asyncio.create_task(self._run_in_bg())
 
     async def __aexit__(self, exc_type, exc_value, traceback):
         if self._bg_task:
@@ -64,7 +64,7 @@ class FilesystemEventStore(Generic[T]):
 
             meta = FilesystemEventMeta(
                 status=EventStatus.PROCESSING,
-                created_at=datetime.now(UTC).isoformat(),
+                created_at=datetime.now(UTC),
                 size_in_bytes=len(payload_data),
             )
 
@@ -76,20 +76,33 @@ class FilesystemEventStore(Generic[T]):
 
     def iter_events_from(self, current_event_id: int) -> Iterator[QueueEvent[T]]:
         page_indexes = self._get_page_indexes()
+        
         if page_indexes:
+            # Handle events newer than the most recent page
             first_id_in_next_page = page_indexes[0][1]
             while current_event_id >= first_id_in_next_page:
                 event = self.get_event(current_event_id)
                 yield event
                 current_event_id -= 1
 
-        for start, end in page_indexes:
-            with open(self.page_dir / f"{start}-{end}", "rb") as f:
-                page: FilesystemPage = self.page_serializer.deserialize(f.read())
-            while current_event_id >= page.offset:
-                event = page.events[current_event_id - page.offset]
-                yield event
-                current_event_id -= 1
+            # Handle events in pages
+            for start, end in page_indexes:
+                with open(self.page_dir / f"{start}-{end}", "rb") as f:
+                    page: FilesystemPage = self.page_serializer.deserialize(f.read())
+                while current_event_id >= page.offset:
+                    event = page.events[current_event_id - page.offset]
+                    yield event
+                    current_event_id -= 1
+        else:
+            # No pages exist yet, iterate through individual event files
+            while current_event_id >= 1:
+                try:
+                    event = self.get_event(current_event_id)
+                    yield event
+                    current_event_id -= 1
+                except FileNotFoundError:
+                    # Event doesn't exist, skip it
+                    current_event_id -= 1
 
     def count_events(self):
         return sum(1 for _ in self.payload_dir.iterdir())

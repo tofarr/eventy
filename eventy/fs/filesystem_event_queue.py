@@ -78,22 +78,23 @@ class FilesystemEventQueue(EventQueue[T]):
 
         if self.subscriber_dir is None:
             self.subscriber_dir = self.root_dir / "subscriber"
-        self.subscriber_dir.mkdir()
+        self.subscriber_dir.mkdir(parents=True, exist_ok=True)
 
         self._load_subscribers_from_disk()
 
     def _load_subscribers_from_disk(self) -> None:
         """Load all subscribers from the subscribers directory"""
         subscribers = {}
-        for subscriber_file in self.subscriber_dir.iterdir():
-            try:
-                subscriber_id = UUID(subscriber_file.name)
-                with open(subscriber_file, "rb") as f:
-                    subscriber_data = f.read()
-                subscriber = self.subscriber_serializer.deserialize(subscriber_data)
-                subscribers[subscriber_id] = subscriber
-            except (ValueError, OSError) as e:
-                _LOGGER.warning(f"Failed to load subscriber {subscriber_file}: {e}")
+        if self.subscriber_dir.exists():
+            for subscriber_file in self.subscriber_dir.iterdir():
+                try:
+                    subscriber_id = UUID(subscriber_file.name)
+                    with open(subscriber_file, "rb") as f:
+                        subscriber_data = f.read()
+                    subscriber = self.subscriber_serializer.deserialize(subscriber_data)
+                    subscribers[subscriber_id] = subscriber
+                except (ValueError, OSError) as e:
+                    _LOGGER.warning(f"Failed to load subscriber {subscriber_file}: {e}")
         self.subscribers = subscribers
 
     async def publish(self, payload: T) -> QueueEvent[T]:
@@ -225,9 +226,13 @@ class FilesystemEventQueue(EventQueue[T]):
     ) -> Page[QueueEvent[T]]:
         """Get events matching the criteria"""
 
-        current_event_id = self.event_store.next_event_id
+        current_event_id = self.event_store.next_event_id - 1  # Start from the last created event
         if page_id:
             current_event_id = int(page_id)
+        
+        # If no events have been created yet, return empty page
+        if current_event_id < 1:
+            return Page(items=[], next_page_id=None)
 
         items = []
         next_page_id = None
@@ -264,22 +269,60 @@ class FilesystemEventQueue(EventQueue[T]):
     async def get_event(self, event_id: int) -> QueueEvent[T]:
         """Get an event by its ID"""
         return self.event_store.get_event(event_id)
+    
+    async def wait_for_processing(self, timeout: float = 1.0) -> None:
+        """Wait for background tasks to process pending events
+        
+        This is primarily useful for testing to ensure events are processed
+        before making assertions.
+        
+        Args:
+            timeout: Maximum time to wait in seconds
+        """
+        import time
+        start_time = time.time()
+        
+        while time.time() - start_time < timeout:
+            # Check if there are any pending events to process
+            event_ids = self.event_coordinator.get_event_ids_to_process_for_current_worker()
+            if not event_ids:
+                # No pending events, wait a bit more to ensure processing is complete
+                await asyncio.sleep(0.05)
+                break
+            await asyncio.sleep(0.05)
+        
+        # Give a final small delay to ensure all async operations complete
+        await asyncio.sleep(0.05)
 
     async def __aenter__(self):
         self._bg_task = asyncio.create_task(self._run_in_bg())
         self._subscriber_task = asyncio.create_task(self._run_subscribers())
-        await self.event_store.__aenter__(self)
-        await self.worker_registry.__aenter__(self)
-        await self.event_coordinator.__aenter__(self)
+        await self.event_store.__aenter__()
+        await self.worker_registry.__aenter__()
+        await self.event_coordinator.__aenter__()
+        return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
+        # Cancel background tasks
         if self._bg_task:
             self._bg_task.cancel()
         if self._subscriber_task:
             self._subscriber_task.cancel()
-        await self.event_store.__aexit__(self, exc_type, exc_value, traceback)
-        await self.worker_registry.__aexit__(self, exc_type, exc_value, traceback)
-        await self.event_coordinator.__aexit__(self, exc_type, exc_value, traceback)
+        
+        # Wait for tasks to finish cancellation
+        tasks_to_wait = []
+        if self._bg_task:
+            tasks_to_wait.append(self._bg_task)
+        if self._subscriber_task:
+            tasks_to_wait.append(self._subscriber_task)
+        
+        if tasks_to_wait:
+            await asyncio.gather(*tasks_to_wait, return_exceptions=True)
+        
+        # Clean up other components
+        await self.event_store.__aexit__(exc_type, exc_value, traceback)
+        await self.worker_registry.__aexit__(exc_type, exc_value, traceback)
+        await self.event_coordinator.__aexit__(exc_type, exc_value, traceback)
 
     async def _run_in_bg(self):
         try:
@@ -290,23 +333,28 @@ class FilesystemEventQueue(EventQueue[T]):
             _LOGGER.info("file_system_event_queue_suspended")
 
     async def _run_subscribers(self):
+        _LOGGER.info("Starting _run_subscribers background task")
         try:
             while True:
-                for (
-                    event_id
-                ) in (
-                    self.event_coordinator.get_event_ids_to_process_for_current_worker()
-                ):
+                event_ids = self.event_coordinator.get_event_ids_to_process_for_current_worker()
+                _LOGGER.debug(f"Processing {len(event_ids)} events for worker {self.worker_registry.worker_id}")
+                
+                for event_id in event_ids:
+                    _LOGGER.info(f"Processing event {event_id}")
                     event = self.event_store.get_event(event_id)
                     if event.status == EventStatus.PENDING:
-                        self.event_store.update_event_status(EventStatus.PROCESSING)
+                        self.event_store.update_event_status(event_id, EventStatus.PROCESSING)
 
+                    # Get the primary worker ID for this event
+                    process_meta = self.event_coordinator.get_process_meta(event_id)
+                    
+                    _LOGGER.info(f"Notifying {len(self.subscribers)} subscribers for event {event_id}")
                     for subscriber in list(self.subscribers.values()):
                         try:
-                            subscriber.on_worker_event(
-                                event, self.worker_registry.worker_id
+                            await subscriber.on_worker_event(
+                                event, self.worker_registry.worker_id, process_meta.primary_worker_id
                             )
-                            await subscriber.on_event(event)
+                            _LOGGER.info(f"Successfully notified subscriber for event {event_id}")
                         except Exception:
                             self.event_store.update_event_status(
                                 event_id, EventStatus.ERROR
@@ -318,7 +366,7 @@ class FilesystemEventQueue(EventQueue[T]):
                     self.event_coordinator.mark_event_processed_for_current_worker(
                         event_id
                     )
-                    status = self.event_coordinator.get_status(event_id)
+                    status = self.event_coordinator.get_status(event_id, process_meta)
                     if status == EventStatus.PROCESSING:
                         continue
                     self.event_coordinator.unscheduled_event(event_id)

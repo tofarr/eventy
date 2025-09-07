@@ -67,7 +67,7 @@ class FilesystemWorkerRegistry:
                 id, timestamp, accepting_events = status_file.name.split("-")
                 statuses.append(
                     FilesystemWorkerStatus(
-                        id=UUID(id),
+                        worker_id=UUID(id),
                         timestamp=int(timestamp),
                         accepting_events=accepting_events == "1",
                     )
