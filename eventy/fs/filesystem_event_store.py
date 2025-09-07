@@ -38,7 +38,8 @@ class FilesystemEventStore(Generic[T]):
         self.payload_dir.mkdir(parents=True, exist_ok=True)
         self.page_dir.mkdir(parents=True, exist_ok=True)
         self.meta_dir.mkdir(parents=True, exist_ok=True)
-        self.next_event_id = max(self._get_all_event_ids()) + 1
+        event_ids = list(self._get_all_event_ids())
+        self.next_event_id = max(event_ids) + 1 if event_ids else 1
 
     async def __aenter__(self):
         if self._bg_task is None:
