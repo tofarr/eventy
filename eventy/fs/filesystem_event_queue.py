@@ -214,9 +214,9 @@ class FilesystemEventQueue(EventQueue[T]):
             result = len(os.listdir(self._event_dir))
             return result
         
-        count = sum(
-            1 for _ in self.iter_events(created_at__min, created_at__max, status__eq)
-        )
+        count = 0
+        async for _ in self.iter_events(created_at__min, created_at__max, status__eq):
+            count += 1
         return count
 
     async def get_event(self, id: int) -> QueueEvent[T]:
