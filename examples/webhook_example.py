@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Dict, Any
 
 from eventy.mem.memory_event_queue import MemoryEventQueue
-from eventy.webhook_subscriber import WebhookSubscriber
+from eventy.subscriber.webhook_subscriber import WebhookSubscriber
 from eventy.serializers.json_serializer import JsonSerializer
 
 

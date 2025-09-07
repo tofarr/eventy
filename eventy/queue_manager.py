@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from typing import TypeVar, Optional
 
 from eventy.event_queue import EventQueue
+from eventy.eventy_config import get_configs
 from eventy.util import get_impl
 
 T = TypeVar("T")
@@ -55,5 +56,10 @@ def get_default_queue_manager() -> QueueManager:
             "EVENTY_QUEUE_MANAGER", QueueManager, MemoryQueueManager
         )
         _default_queue_manager = manager_class()
+
+        configs = get_configs()
+        for config in configs:
+            for payload_type in config.get_payload_types():
+                _default_queue_manager.register(payload_type)
 
     return _default_queue_manager

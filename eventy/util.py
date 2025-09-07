@@ -64,24 +64,11 @@ def get_impls(key: str, base_type: type[T], default_types: list[type] | None = N
     type_names = [name.strip() for name in env_value.split(",") if name.strip()]
     
     for type_name in type_names:
-        try:
-            imported_item = import_from(type_name)
-            
-            # Check if it's an implementation class
-            if (isinstance(imported_item, type) and 
-                issubclass(imported_item, base_type)):
-                implementing_types.append(imported_item)
-            else:
-                # Assume it's a function that returns a list of implementation classes
-                result = imported_item()
-                if isinstance(result, list):
-                    for item in result:
-                        if (isinstance(item, type) and 
-                            issubclass(item, base_type)):
-                            implementing_types.append(item)
-        except Exception as e:
-            # Log error for invalid imports but continue processing
-            _LOGGER.error(f"Failed to import type '{type_name}': {e}")
-            continue
+        imported_item = import_from(type_name)
+
+        # Check if it's an implementation class
+        assert (isinstance(imported_item, type) and issubclass(imported_item, base_type))
+        
+        implementing_types.append(imported_item)
     
     return implementing_types

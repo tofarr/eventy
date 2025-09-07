@@ -2,11 +2,9 @@ import asyncio
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import TypeVar, Dict, Type, cast
-from uuid import UUID
 
 from eventy.event_queue import EventQueue
 from eventy.queue_manager import QueueManager
-from eventy.subscriber import Subscriber
 from eventy.mem.memory_event_queue import MemoryEventQueue
 from eventy.serializers.serializer import Serializer, get_default_serializer
 
@@ -45,46 +43,6 @@ class MemoryQueueManager(QueueManager):
     async def get_event_queue(self, payload_type: Type[T]) -> EventQueue[T]:
         """Get an event queue for the event type given (QueueManager interface)"""
         return await self.get_queue(payload_type)
-
-    async def publish(self, payload_type: Type[T], payload: T) -> None:
-        """Publish a payload to the queue for the specified payload type
-
-        Args:
-            payload_type: The type of payload
-            payload: The payload to publish
-        """
-        queue = await self.get_queue(payload_type)
-        await queue.publish(payload)
-
-    async def subscribe(self, payload_type: Type[T], subscriber: Subscriber[T]) -> UUID:
-        """Subscribe to events for the specified payload type
-
-        Args:
-            payload_type: The type of payload to subscribe to
-            subscriber: The subscriber to add
-
-        Returns:
-            UUID: A unique identifier for the subscriber that can be used to unsubscribe
-        """
-        queue = await self.get_queue(payload_type)
-        return await queue.subscribe(subscriber)
-
-    async def unsubscribe(self, payload_type: Type[T], subscriber_id: UUID) -> bool:
-        """Remove a subscriber from the queue for the specified payload type
-
-        Args:
-            payload_type: The type of payload the subscriber was subscribed to
-            subscriber_id: The UUID returned by subscribe()
-
-        Returns:
-            bool: True if the subscriber was found and removed, False otherwise
-        """
-        try:
-            queue = await self.get_queue(payload_type)
-            return await queue.unsubscribe(subscriber_id)
-        except KeyError:
-            # Queue doesn't exist for this payload type
-            return False
 
     async def get_queue_types(self) -> list[type]:
         """List all available event queues."""

@@ -22,7 +22,3 @@ class Subscriber(Generic[T], ABC):
     @abstractmethod
     async def on_event(self, event: QueueEvent[T]) -> None:
         """Callback for when an event occurs"""
-
-
-def get_public_subscriber_types() -> list[type[Subscriber]]:
-    return get_impls("EVENTY_SUBSCRIBER_TYPES", Subscriber)

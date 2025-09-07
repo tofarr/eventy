@@ -3,11 +3,9 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
 from typing import TypeVar, Dict, Type, cast
-from uuid import UUID
 
 from eventy.event_queue import EventQueue
 from eventy.queue_manager import QueueManager
-from eventy.subscriber import Subscriber
 from eventy.fs.filesystem_event_queue import FilesystemEventQueue
 from eventy.serializers.serializer import Serializer, get_default_serializer
 
@@ -54,41 +52,6 @@ class FilesystemQueueManager(QueueManager):
     async def get_queue(self, payload_type: Type[T]) -> FilesystemEventQueue[T]:
         """Get a filesystem event queue for the specified payload type"""
         return cast(FilesystemEventQueue[T], await self.get_event_queue(payload_type))
-
-    async def subscribe(self, payload_type: Type[T], subscriber: Subscriber[T]) -> UUID:
-        """Subscribe to events for a specific payload type
-
-        Args:
-            payload_type: The type of payload to subscribe to
-            subscriber: The subscriber to add
-
-        Returns:
-            UUID: A unique identifier for the subscriber that can be used to unsubscribe
-        """
-        queue = await self.get_event_queue(payload_type)
-        return await queue.subscribe(subscriber)
-
-    async def unsubscribe(self, payload_type: Type[T], subscriber_id: UUID) -> bool:
-        """Remove a subscriber from the queue for the specified payload type
-
-        Args:
-            payload_type: The type of payload the subscriber was subscribed to
-            subscriber_id: The UUID returned by subscribe()
-
-        Returns:
-            bool: True if the subscriber was found and removed, False otherwise
-        """
-        try:
-            queue = await self.get_event_queue(payload_type)
-            return await queue.unsubscribe(subscriber_id)
-        except ValueError:
-            # Queue doesn't exist for this payload type
-            return False
-
-    async def publish(self, payload_type: Type[T], payload: T) -> None:
-        """Publish a payload to the queue for the specified payload type"""
-        queue = await self.get_event_queue(payload_type)
-        await queue.publish(payload)
 
     async def register(self, payload_type: type[T]) -> None:
         """Register a payload type (Create an event queue)"""
