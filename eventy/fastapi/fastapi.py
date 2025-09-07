@@ -1,7 +1,7 @@
 from datetime import datetime
 import logging
-from typing import TypeVar
-from uuid import uuid4
+from typing import TypeVar, Union
+from uuid import UUID, uuid4
 from eventy.event_queue import EventQueue
 from eventy.event_status import EventStatus
 from eventy.eventy_config import EventyConfig
@@ -17,6 +17,8 @@ from fastapi import (
     WebSocketState,
 )
 from pydantic import BaseModel
+
+from eventy.subscriber.subscriber import Subscriber
 
 
 T = TypeVar("T")
@@ -46,9 +48,20 @@ def add_queue_endpoints(
         items: list[payload_type]  # type: ignore
         next_page_id: str | None
 
+    subscriber_type = Union[
+        tuple(
+            s for s in config.get_subscriber_types()
+            if s.payload_type == payload_type or issubclass(s.payload_type, payload_type)
+        )
+    ]
+
+    class SubscriberPage(BaseModel):
+        items: list[subscriber_type]  # type: ignore
+        next_page_id: str | None
+
     @fastapi.post("/event")
     async def publish(payload: payload_type) -> ResponseEvent:  # type: ignore
-        event_queue: EventQueue[T] = queue_manager.get_event_queue(payload_type)
+        event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
         event = await event_queue.publish(payload)
         return event
 
@@ -61,7 +74,7 @@ def add_queue_endpoints(
         status__eq: EventStatus | None = None,
     ) -> ResponsePage:
         assert limit <= 100
-        event_queue: EventQueue[T] = queue_manager.get_event_queue(payload_type)
+        event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
         page = await event_queue.search_events(
             page_id, limit, created_at__min, created_at__max, status__eq
         )
@@ -69,7 +82,7 @@ def add_queue_endpoints(
 
     @fastapi.get("/event/{id}")
     async def get_event(id: int) -> ResponseEvent:
-        event_queue: EventQueue[T] = queue_manager.get_event_queue(payload_type)
+        event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
         try:
             event = await event_queue.get_event(id)
             return event
@@ -79,11 +92,35 @@ def add_queue_endpoints(
     @fastapi.get("/event")
     async def get_all_events(event_ids: list[int]) -> list[ResponseEvent | None]:
         assert len(event_ids) <= 100
-        event_queue: EventQueue[T] = queue_manager.get_event_queue(payload_type)
+        event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
         events = await event_queue.get_all_events(event_ids)
         return events
 
+    @fastapi.get("/subscriber/search")
+    async def get_subscriber(id: UUID):
+        event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
+        raise NotImplemented()
+    
     # TODO: Add an add_subscriber endpoint...
+    @fastapi.get("/subscriber/search")
+    async def get_subscriber(id: UUID) -> SubscriberPage:
+        event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
+        raise NotImplemented()
+
+    @fastapi.post("/subscriber")
+    async def add_subscriber(subscriber: subscriber_type) -> UUID: # type: ignore
+        event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
+        raise NotImplemented()
+    
+    @fastapi.get("/subscriber/{id}")
+    async def add_subscriber(subscriber: subscriber_type) -> UUID: # type: ignore
+        event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
+        raise NotImplemented()
+    
+    @fastapi.delete("/subscriber/{id}")
+    async def remove_subscriber(id: UUID) -> bool:
+        event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
+        raise NotImplemented()
 
     @fastapi.websocket("/socket")
     async def socket(
