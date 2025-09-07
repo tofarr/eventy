@@ -6,7 +6,6 @@ from typing import TypeVar, Dict, Type, cast
 from uuid import UUID
 
 from eventy.event_queue import EventQueue
-from eventy.queue_event import QueueEvent
 from eventy.queue_manager import QueueManager
 from eventy.subscriber import Subscriber
 from eventy.fs.filesystem_event_queue import FilesystemEventQueue
@@ -58,11 +57,11 @@ class FilesystemQueueManager(QueueManager):
 
     async def subscribe(self, payload_type: Type[T], subscriber: Subscriber[T]) -> UUID:
         """Subscribe to events for a specific payload type
-        
+
         Args:
             payload_type: The type of payload to subscribe to
             subscriber: The subscriber to add
-            
+
         Returns:
             UUID: A unique identifier for the subscriber that can be used to unsubscribe
         """
@@ -75,7 +74,7 @@ class FilesystemQueueManager(QueueManager):
         Args:
             payload_type: The type of payload the subscriber was subscribed to
             subscriber_id: The UUID returned by subscribe()
-            
+
         Returns:
             bool: True if the subscriber was found and removed, False otherwise
         """
@@ -118,19 +117,3 @@ class FilesystemQueueManager(QueueManager):
         """List all available event queues"""
         async with self.lock:
             return list(self.queues.keys())
-
-    async def list_registered_types(self) -> list[Type]:
-        """List all registered payload types"""
-        return await self.get_queue_types()
-
-    async def cleanup_old_events(self) -> None:
-        """Cleanup old events across all queues"""
-        async with self.lock:
-            for queue in self.queues.values():
-                await queue._cleanup_old_events()
-
-    async def consolidate_all_queues(self) -> None:
-        """Force consolidation of events to pages across all queues"""
-        async with self.lock:
-            for queue in self.queues.values():
-                await queue._consolidate_events_to_page()

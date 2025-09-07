@@ -62,7 +62,7 @@ class MemoryQueueManager(QueueManager):
         Args:
             payload_type: The type of payload to subscribe to
             subscriber: The subscriber to add
-            
+
         Returns:
             UUID: A unique identifier for the subscriber that can be used to unsubscribe
         """
@@ -75,7 +75,7 @@ class MemoryQueueManager(QueueManager):
         Args:
             payload_type: The type of payload the subscriber was subscribed to
             subscriber_id: The UUID returned by subscribe()
-            
+
         Returns:
             bool: True if the subscriber was found and removed, False otherwise
         """

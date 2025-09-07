@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class WebhookSubscriber(Subscriber[T]):
     """
     A subscriber that sends HTTP webhook requests when events are received.
-    
+
     This subscriber uses httpx to send HTTP requests to a specified URL with
     the event payload serialized using a configurable serializer.
     """
@@ -35,7 +35,7 @@ class WebhookSubscriber(Subscriber[T]):
     ):
         """
         Initialize the webhook subscriber.
-        
+
         Args:
             url: The webhook URL to send requests to
             payload_type: The type of payload this subscriber handles
@@ -45,7 +45,7 @@ class WebhookSubscriber(Subscriber[T]):
             timeout: Request timeout in seconds
             retry_attempts: Number of retry attempts on failure
             retry_delay: Delay between retry attempts in seconds
-            
+
         Raises:
             ValueError: If URL is invalid or request_method is not supported
         """
@@ -53,13 +53,13 @@ class WebhookSubscriber(Subscriber[T]):
         parsed_url = urlparse(url)
         if not parsed_url.scheme or not parsed_url.netloc:
             raise ValueError(f"Invalid URL: {url}")
-        
+
         # Validate request method
         valid_methods = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
         request_method = request_method.upper()
         if request_method not in valid_methods:
             raise ValueError(f"Unsupported request method: {request_method}")
-        
+
         self.url = url
         self.payload_type = payload_type
         self.serializer = serializer or JsonSerializer[T]()
@@ -68,7 +68,7 @@ class WebhookSubscriber(Subscriber[T]):
         self.timeout = timeout
         self.retry_attempts = max(0, retry_attempts)
         self.retry_delay = max(0.0, retry_delay)
-        
+
         # Set default content type based on serializer
         if "content-type" not in (k.lower() for k in self.headers.keys()):
             if self.serializer.is_json:
@@ -79,14 +79,14 @@ class WebhookSubscriber(Subscriber[T]):
     async def on_event(self, event: QueueEvent[T]) -> None:
         """
         Handle an event by sending a webhook request.
-        
+
         Args:
             event: The event to process
         """
         try:
             # Serialize the payload
             content = self.serializer.serialize(event.payload)
-            
+
             # Prepare request data
             request_data = {
                 "method": self.request_method,
@@ -94,77 +94,82 @@ class WebhookSubscriber(Subscriber[T]):
                 "headers": self.headers,
                 "timeout": self.timeout,
             }
-            
+
             # Add content for methods that support it
             if self.request_method not in {"GET", "HEAD", "OPTIONS"}:
                 request_data["content"] = content
-            
+
             # Send request with retries
             await self._send_with_retries(request_data, event)
-            
+
         except Exception as e:
             logger.error(
-                f"Failed to send webhook for event {event.id}: {e}",
-                exc_info=True
+                f"Failed to send webhook for event {event.id}: {e}", exc_info=True
             )
             # Re-raise to allow the event queue to handle the error
             raise
 
-    async def _send_with_retries(self, request_data: Dict[str, Any], event: QueueEvent[T]) -> None:
+    async def _send_with_retries(
+        self, request_data: Dict[str, Any], event: QueueEvent[T]
+    ) -> None:
         """
         Send HTTP request with retry logic.
-        
+
         Args:
             request_data: Request parameters for httpx
             event: The original event (for logging)
-            
+
         Raises:
             httpx.HTTPError: If all retry attempts fail
         """
         last_exception = None
-        
+
         for attempt in range(self.retry_attempts + 1):
             try:
                 async with httpx.AsyncClient() as client:
                     response = await client.request(**request_data)
                     response.raise_for_status()
-                    
+
                     logger.debug(
                         f"Webhook sent successfully for event {event.id} "
                         f"(attempt {attempt + 1}): {response.status_code}"
                     )
                     return
-                    
+
             except httpx.HTTPError as e:
                 last_exception = e
                 logger.warning(
                     f"Webhook attempt {attempt + 1} failed for event {event.id}: {e}"
                 )
-                
+
                 # Don't retry on client errors (4xx), only on server errors (5xx) and network issues
-                if hasattr(e, 'response') and e.response is not None:
+                if hasattr(e, "response") and e.response is not None:
                     if 400 <= e.response.status_code < 500:
                         logger.error(
                             f"Client error {e.response.status_code} for webhook, not retrying"
                         )
                         raise
-                
+
                 # Wait before retry (except on last attempt)
                 if attempt < self.retry_attempts:
                     import asyncio
-                    await asyncio.sleep(self.retry_delay * (attempt + 1))  # Exponential backoff
-            
+
+                    await asyncio.sleep(
+                        self.retry_delay * (attempt + 1)
+                    )  # Exponential backoff
+
             except Exception as e:
                 last_exception = e
                 logger.warning(
                     f"Webhook attempt {attempt + 1} failed for event {event.id}: {e}"
                 )
-                
+
                 # Wait before retry (except on last attempt)
                 if attempt < self.retry_attempts:
                     import asyncio
+
                     await asyncio.sleep(self.retry_delay * (attempt + 1))
-        
+
         # All attempts failed
         logger.error(
             f"All {self.retry_attempts + 1} webhook attempts failed for event {event.id}"

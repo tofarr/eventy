@@ -41,23 +41,17 @@ class MemoryEventQueue(EventQueue[T]):
         self, event_id: int, stored_event: StoredEvent
     ) -> QueueEvent[T]:
         """Reconstruct a QueueEvent from a StoredEvent"""
-        try:
-            payload = self.serializer.deserialize(stored_event.serialized_payload)
-            return QueueEvent(
-                id=event_id,
-                status=stored_event.status,
-                payload=payload,
-                created_at=stored_event.created_at,
-            )
-        except Exception:
-            # If deserialization fails, we can't reconstruct the event
-            raise ValueError(
-                f"Failed to deserialize payload for event {stored_event.id}"
-            )
+        payload = self.serializer.deserialize(stored_event.serialized_payload)
+        return QueueEvent(
+            id=event_id,
+            status=stored_event.status,
+            payload=payload,
+            created_at=stored_event.created_at,
+        )
 
     async def subscribe(self, subscriber: Subscriber[T]) -> UUID:
         """Add a subscriber to this queue
-        
+
         Returns:
             UUID: A unique identifier for the subscriber that can be used to unsubscribe
         """
@@ -68,10 +62,10 @@ class MemoryEventQueue(EventQueue[T]):
 
     async def unsubscribe(self, subscriber_id: UUID) -> bool:
         """Remove a subscriber from this queue
-        
+
         Args:
             subscriber_id: The UUID returned by subscribe()
-            
+
         Returns:
             bool: True if the subscriber was found and removed, False otherwise
         """
@@ -119,12 +113,12 @@ class MemoryEventQueue(EventQueue[T]):
 
             # Reconstruct events for filtering
             all_events = []
-            id = 1
+            event_id = 1
             for stored_event in self.events:
                 try:
-                    event = self._reconstruct_event(id, stored_event)
+                    event = self._reconstruct_event(event_id, stored_event)
                     all_events.append(event)
-                    id += 1
+                    event_id += 1
                 except Exception:
                     # Skip corrupted events
                     continue
@@ -184,9 +178,9 @@ class MemoryEventQueue(EventQueue[T]):
                 count += 1
             return count
 
-    async def get_event(self, id: int) -> QueueEvent[T]:
+    async def get_event(self, event_id: int) -> QueueEvent[T]:
         """Get an event given its id."""
-        index = id - 1
+        index = event_id - 1
         async with self.lock:
             stored_event = self.events[index]
-        return self._reconstruct_event(id, stored_event)
+        return self._reconstruct_event(event_id, stored_event)

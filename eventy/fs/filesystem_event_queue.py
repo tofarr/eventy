@@ -2,15 +2,12 @@ import asyncio
 import logging
 import os
 import json
-import fcntl
-import base64
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, UTC
+from datetime import datetime, UTC
 from pathlib import Path
-import pickle
 import random
 import time
-from typing import Generator, Iterator, TypeVar, Optional, List, AsyncIterator
+from typing import TypeVar, Optional, AsyncIterator
 from uuid import UUID, uuid4
 
 from eventy.event_queue import EventQueue
@@ -110,42 +107,44 @@ class FilesystemEventQueue(EventQueue[T]):
 
     async def subscribe(self, subscriber: Subscriber[T]) -> UUID:
         """Subscribe to events
-        
+
         Returns:
             UUID: A unique identifier for the subscriber that can be used to unsubscribe
         """
         subscriber_id = uuid4()
         self.subscribers[subscriber_id] = subscriber
-        
+
         # Persist subscriber to disk
         subscriber_file = self._subscribers_dir / str(subscriber_id)
         subscriber_data = self.subscriber_serializer.serialize(subscriber)
         with open(subscriber_file, "wb") as f:
             f.write(subscriber_data)
-        
+
         if self._bg_task and not self._subscriber_task:
             self._subscriber_task = asyncio.create_task(self._run_subscribers())
         return subscriber_id
 
     async def unsubscribe(self, subscriber_id: UUID) -> bool:
         """Remove a subscriber from this queue
-        
+
         Args:
             subscriber_id: The UUID returned by subscribe()
-            
+
         Returns:
             bool: True if the subscriber was found and removed, False otherwise
         """
         if subscriber_id in self.subscribers:
             del self.subscribers[subscriber_id]
-            
+
             # Remove subscriber file from disk
             subscriber_file = self._subscribers_dir / str(subscriber_id)
             try:
                 os.remove(subscriber_file)
             except FileNotFoundError:
-                _LOGGER.warning(f"Subscriber file {subscriber_file} not found during unsubscribe")
-            
+                _LOGGER.warning(
+                    f"Subscriber file {subscriber_file} not found during unsubscribe"
+                )
+
             return True
         return False
 
@@ -157,7 +156,9 @@ class FilesystemEventQueue(EventQueue[T]):
         page_indexes.sort(key=lambda n: n[0], reverse=True)
         return page_indexes
 
-    async def _iter_events_from(self, current_event_id: int) -> AsyncIterator[QueueEvent[T]]:
+    async def _iter_events_from(
+        self, current_event_id: int
+    ) -> AsyncIterator[QueueEvent[T]]:
         page_indexes = self._get_page_indexes()
         if page_indexes:
             first_id_in_next_page = page_indexes[0][1]
@@ -213,27 +214,27 @@ class FilesystemEventQueue(EventQueue[T]):
         if created_at__max is None and created_at__min is None and status__eq is None:
             result = len(os.listdir(self._event_dir))
             return result
-        
+
         count = 0
         async for _ in self.iter_events(created_at__min, created_at__max, status__eq):
             count += 1
         return count
 
-    async def get_event(self, id: int) -> QueueEvent[T]:
+    async def get_event(self, event_id: int) -> QueueEvent[T]:
         """Get an event by its ID"""
-        event_file = self._event_dir / str(id)
+        event_file = self._event_dir / str(event_id)
         # Handle both bytes and string serialization
         if self.serializer.is_json:
             with open(event_file, "r") as f:
-                payload = self.serializer.deserialize(f.read().encode('utf-8'))
+                payload = self.serializer.deserialize(f.read().encode("utf-8"))
         else:
             with open(event_file, "r") as f:
-                payload = self.serializer.deserialize(f.read().encode('utf-8'))
-        meta_file = self._meta_dir / str(id)
+                payload = self.serializer.deserialize(f.read().encode("utf-8"))
+        meta_file = self._meta_dir / str(event_id)
         with open(meta_file, "r") as f:
             meta: dict[str, str | int] = json.load(f)
         return QueueEvent(
-            id=id,
+            id=event_id,
             payload=payload,
             status=EventStatus[meta.get("status")],
             created_at=datetime.fromisoformat(meta.get("created_at")),
@@ -268,7 +269,7 @@ class FilesystemEventQueue(EventQueue[T]):
                 with open(event_file, "x") as f:
                     # Handle both bytes and string serialization
                     if isinstance(event_data, bytes):
-                        f.write(event_data.decode('utf-8'))
+                        f.write(event_data.decode("utf-8"))
                     else:
                         f.write(event_data)
                 self._next_event_id = event_id + 1
@@ -310,7 +311,7 @@ class FilesystemEventQueue(EventQueue[T]):
                 self._load_subscribers_from_disk()
                 await asyncio.sleep(self.bg_task_delay)
         except asyncio.CancelledError:
-            _LOGGER.info(f"file_system_event_queue_suspended")
+            _LOGGER.info("file_system_event_queue_suspended")
 
     def _get_assigned_events(self, worker_id: UUID) -> set[int]:
         try:
@@ -369,7 +370,7 @@ class FilesystemEventQueue(EventQueue[T]):
                     event = await self.get_event(event_id)
                     size_in_bytes = len(self.serializer.serialize(event.payload))
                     meta_file = self._meta_dir / str(event_id)
-                    
+
                     # Update status to PROCESSING
                     with open(meta_file, "w") as f:
                         json.dump(
@@ -378,9 +379,9 @@ class FilesystemEventQueue(EventQueue[T]):
                                 "created_at": event.created_at.isoformat(),
                                 "size_in_bytes": size_in_bytes,
                             },
-                            f
+                            f,
                         )
-                    
+
                     final_status = EventStatus.PROCESSED
                     for subscriber in list(self.subscribers.values()):
                         try:
@@ -391,7 +392,7 @@ class FilesystemEventQueue(EventQueue[T]):
                             _LOGGER.error(
                                 "subscriber_error", exc_info=True, stack_info=True
                             )
-                    
+
                     # Update final status
                     with open(meta_file, "w") as f:
                         json.dump(
@@ -400,15 +401,15 @@ class FilesystemEventQueue(EventQueue[T]):
                                 "created_at": event.created_at.isoformat(),
                                 "size_in_bytes": size_in_bytes,
                             },
-                            f
+                            f,
                         )
-                    
+
                     # Remove the event assignment
                     self._remove_assigned_event(self.worker_id, event_id)
-                    
+
                 await asyncio.sleep(self.subscriber_task_delay)
         except asyncio.CancelledError:
-            _LOGGER.info(f"file_system_event_queue_suspended")
+            _LOGGER.info("file_system_event_queue_suspended")
 
     async def _maybe_build_page(self) -> None:
         page_indexes = self._get_page_indexes()
