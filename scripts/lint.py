@@ -14,21 +14,17 @@ def main():
     """Run pylint on the eventy package."""
     project_root = Path(__file__).parent.parent
     eventy_package = project_root / "eventy"
-    
+
     if not eventy_package.exists():
         print(f"Error: Package directory {eventy_package} not found")
         sys.exit(1)
-    
+
     # Run pylint with poetry
-    cmd = [
-        "poetry", "run", "pylint", 
-        str(eventy_package),
-        "--output-format=text"
-    ]
-    
+    cmd = ["poetry", "run", "pylint", str(eventy_package), "--output-format=text"]
+
     print(f"Running: {' '.join(cmd)}")
     print("-" * 60)
-    
+
     try:
         result = subprocess.run(cmd, cwd=project_root, check=False)
         sys.exit(result.returncode)
