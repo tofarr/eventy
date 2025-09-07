@@ -49,10 +49,10 @@ def get_default_queue_manager() -> QueueManager:
     global _default_queue_manager
 
     if _default_queue_manager is None:
-        from eventy.mem.memory_event_queue_manager import MemoryEventQueueManager
+        from eventy.mem.memory_event_queue_manager import MemoryQueueManager
 
         manager_class = get_impl(
-            "EVENTY_QUEUE_MANAGER", QueueManager, MemoryEventQueueManager
+            "EVENTY_QUEUE_MANAGER", QueueManager, MemoryQueueManager
         )
         _default_queue_manager = manager_class()
 

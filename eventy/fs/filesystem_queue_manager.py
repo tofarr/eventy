@@ -16,7 +16,7 @@ T = TypeVar("T")
 
 
 @dataclass
-class FilesystemEventQueueManager(QueueManager):
+class FilesystemQueueManager(QueueManager):
     """
     Manager for filesystem event queues.
     Each payload type gets its own subdirectory under the root directory.

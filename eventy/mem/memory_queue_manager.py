@@ -14,7 +14,7 @@ T = TypeVar("T")
 
 
 @dataclass
-class MemoryEventQueueManager(QueueManager):
+class MemoryQueueManager(QueueManager):
     """
     Manager for memory event queues that creates them lazily by payload type.
     Suitable for use by a single process and small queue.
