@@ -1,3 +1,4 @@
+from http.client import HTTPResponse
 import logging
 from typing import TypeVar, Dict, Optional, Any
 from urllib.parse import urlparse
@@ -143,10 +144,11 @@ class WebhookSubscriber(Subscriber[T]):
                 )
 
                 # Don't retry on client errors (4xx), only on server errors (5xx) and network issues
-                if hasattr(e, "response") and e.response is not None:
-                    if 400 <= e.response.status_code < 500:
+                response: HTTPResponse | None = getattr(e, "response", None)
+                if response:
+                    if 400 <= response.status_code < 500:
                         logger.error(
-                            f"Client error {e.response.status_code} for webhook, not retrying"
+                            f"Client error {response.status_code} for webhook, not retrying"
                         )
                         raise
 
