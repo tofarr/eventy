@@ -26,6 +26,7 @@ server = [
 black = "^25.1.0"
 pylint = "^3.3.8"
 pytest = "^8.4.2"
+pytest-asyncio = "^1.1.0"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
