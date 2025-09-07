@@ -14,10 +14,14 @@ from typing import Generator, Iterator, TypeVar, Optional, List, AsyncIterator
 from uuid import UUID, uuid4
 
 from eventy.event_queue import EventQueue
+<<<<<<< HEAD
 from eventy.fs.filesystem_event_assigner import FilesystemEventAssigner
 from eventy.fs.filesystem_page import FilesystemPage
+=======
+from eventy.event_status import EventStatus
+>>>>>>> ffc9ed86a66fd1625e27522c75d086e283bb73f5
 from eventy.page import Page
-from eventy.queue_event import QueueEvent, EventStatus
+from eventy.queue_event import QueueEvent
 from eventy.serializers.serializer import Serializer, get_default_serializer
 from eventy.subscriber import Subscriber
 
