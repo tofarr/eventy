@@ -46,7 +46,7 @@ class FilesystemEventQueue(EventQueue[T]):
     page_serializer: Serializer[FilesystemPage[T]] = field(
         default_factory=get_default_serializer
     )
-    subscribers: list[Subscriber[T]] = field(default_factory=list)
+    subscribers: dict[UUID, Subscriber[T]] = field(default_factory=dict)
 
     _event_dir: Path | None = None
     _meta_dir: Path | None = None
@@ -82,11 +82,31 @@ class FilesystemEventQueue(EventQueue[T]):
         event_id = self._create_event_files(payload)
         self._assign_event(event_id)
 
-    async def subscribe(self, subscriber: Subscriber[T]) -> None:
-        """Subscribe to events"""
-        self.subscribers.append(subscriber)
+    async def subscribe(self, subscriber: Subscriber[T]) -> UUID:
+        """Subscribe to events
+        
+        Returns:
+            UUID: A unique identifier for the subscriber that can be used to unsubscribe
+        """
+        subscriber_id = uuid4()
+        self.subscribers[subscriber_id] = subscriber
         if self._bg_task and not self._subscriber_task:
             self._subscriber_task = asyncio.create_task(self._run_subscribers())
+        return subscriber_id
+
+    async def unsubscribe(self, subscriber_id: UUID) -> bool:
+        """Remove a subscriber from this queue
+        
+        Args:
+            subscriber_id: The UUID returned by subscribe()
+            
+        Returns:
+            bool: True if the subscriber was found and removed, False otherwise
+        """
+        if subscriber_id in self.subscribers:
+            del self.subscribers[subscriber_id]
+            return True
+        return False
 
     def _get_page_indexes(self) -> list[tuple[int, int]]:
         page_names = os.listdir(self._page_dir)
@@ -304,7 +324,7 @@ class FilesystemEventQueue(EventQueue[T]):
                             }
                         )
                     final_status = EventStatus.PROCESSED
-                    for subscriber in list(self.subscribers):
+                    for subscriber in list(self.subscribers.values()):
                         try:
                             await subscriber.on_event(event)
                         except Exception:

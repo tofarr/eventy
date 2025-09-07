@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from typing import Generic, TypeVar, Optional, AsyncIterator
+from uuid import UUID
 from eventy.event_status import EventStatus
 from eventy.page import Page
 from eventy.queue_event import QueueEvent
@@ -16,8 +17,23 @@ class EventQueue(Generic[T], ABC):
     """ Type of event handled by this queue """
 
     @abstractmethod
-    async def subscribe(self, subscriber: Subscriber[T]) -> None:
-        """Add a subscriber to this queue"""
+    async def subscribe(self, subscriber: Subscriber[T]) -> UUID:
+        """Add a subscriber to this queue
+        
+        Returns:
+            UUID: A unique identifier for the subscriber that can be used to unsubscribe
+        """
+
+    @abstractmethod
+    async def unsubscribe(self, subscriber_id: UUID) -> bool:
+        """Remove a subscriber from this queue
+        
+        Args:
+            subscriber_id: The UUID returned by subscribe()
+            
+        Returns:
+            bool: True if the subscriber was found and removed, False otherwise
+        """
 
     @abstractmethod
     async def publish(self, payload: T) -> None:

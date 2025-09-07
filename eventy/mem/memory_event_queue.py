@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, UTC
 import logging
 from typing import TypeVar, Optional
+from uuid import UUID, uuid4
 
 from eventy.event_queue import EventQueue
 from eventy.page import Page
@@ -33,7 +34,7 @@ class MemoryEventQueue(EventQueue[T]):
     event_type: type[T]
     serializer: Serializer[T] = field(default_factory=get_default_serializer)
     events: list[StoredEvent] = field(default_factory=list)
-    subscribers: list[Subscriber[T]] = field(default_factory=list)
+    subscribers: dict[UUID, Subscriber[T]] = field(default_factory=dict)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     def _reconstruct_event(
@@ -54,10 +55,31 @@ class MemoryEventQueue(EventQueue[T]):
                 f"Failed to deserialize payload for event {stored_event.id}"
             )
 
-    async def subscribe(self, subscriber: Subscriber[T]) -> None:
-        """Add a subscriber to this queue"""
+    async def subscribe(self, subscriber: Subscriber[T]) -> UUID:
+        """Add a subscriber to this queue
+        
+        Returns:
+            UUID: A unique identifier for the subscriber that can be used to unsubscribe
+        """
+        subscriber_id = uuid4()
         async with self.lock:
-            self.subscribers.append(subscriber)
+            self.subscribers[subscriber_id] = subscriber
+        return subscriber_id
+
+    async def unsubscribe(self, subscriber_id: UUID) -> bool:
+        """Remove a subscriber from this queue
+        
+        Args:
+            subscriber_id: The UUID returned by subscribe()
+            
+        Returns:
+            bool: True if the subscriber was found and removed, False otherwise
+        """
+        async with self.lock:
+            if subscriber_id in self.subscribers:
+                del self.subscribers[subscriber_id]
+                return True
+            return False
 
     async def publish(self, payload: T) -> None:
         """Publish an event to this queue"""
@@ -75,7 +97,7 @@ class MemoryEventQueue(EventQueue[T]):
             # Notify all subscribers
             event = self._reconstruct_event(len(self.events), stored_event)
             final_status = EventStatus.PROCESSING
-            for subscriber in list(self.subscribers):
+            for subscriber in list(self.subscribers.values()):
                 try:
                     await subscriber.on_event(event)
                 except Exception:
