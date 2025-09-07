@@ -75,6 +75,15 @@ class MemoryEventQueue(EventQueue[T]):
                 return True
             return False
 
+    async def list_subscribers(self) -> dict[UUID, Subscriber[T]]:
+        """List all subscribers along with their IDs
+
+        Returns:
+            dict[UUID, Subscriber[T]]: A dictionary mapping subscriber IDs to their subscriber objects
+        """
+        async with self.lock:
+            return self.subscribers.copy()
+
     async def publish(self, payload: T) -> None:
         """Publish an event to this queue"""
 

@@ -148,6 +148,14 @@ class FilesystemEventQueue(EventQueue[T]):
             return True
         return False
 
+    async def list_subscribers(self) -> dict[UUID, Subscriber[T]]:
+        """List all subscribers along with their IDs
+
+        Returns:
+            dict[UUID, Subscriber[T]]: A dictionary mapping subscriber IDs to their subscriber objects
+        """
+        return self.subscribers.copy()
+
     def _get_page_indexes(self) -> list[tuple[int, int]]:
         page_names = os.listdir(self._page_dir)
         page_indexes = [

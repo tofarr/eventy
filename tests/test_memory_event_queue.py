@@ -142,6 +142,84 @@ class TestMemoryEventQueue:
         assert len(queue.subscribers) == 0
 
     @pytest.mark.asyncio
+    async def test_list_subscribers_empty(self, queue):
+        """Test listing subscribers when there are none"""
+        subscribers = await queue.list_subscribers()
+        
+        assert isinstance(subscribers, dict)
+        assert len(subscribers) == 0
+
+    @pytest.mark.asyncio
+    async def test_list_subscribers_single(self, queue, subscriber):
+        """Test listing subscribers with a single subscriber"""
+        subscriber_id = await queue.subscribe(subscriber)
+        
+        subscribers = await queue.list_subscribers()
+        
+        assert len(subscribers) == 1
+        assert subscriber_id in subscribers
+        assert subscribers[subscriber_id] is subscriber
+
+    @pytest.mark.asyncio
+    async def test_list_subscribers_multiple(self, queue):
+        """Test listing subscribers with multiple subscribers"""
+        subscriber1 = SubscriberForTesting()
+        subscriber2 = SubscriberForTesting()
+        subscriber3 = SubscriberForTesting()
+        
+        id1 = await queue.subscribe(subscriber1)
+        id2 = await queue.subscribe(subscriber2)
+        id3 = await queue.subscribe(subscriber3)
+        
+        subscribers = await queue.list_subscribers()
+        
+        assert len(subscribers) == 3
+        assert id1 in subscribers
+        assert id2 in subscribers
+        assert id3 in subscribers
+        assert subscribers[id1] is subscriber1
+        assert subscribers[id2] is subscriber2
+        assert subscribers[id3] is subscriber3
+
+    @pytest.mark.asyncio
+    async def test_list_subscribers_after_unsubscribe(self, queue):
+        """Test listing subscribers after unsubscribing some"""
+        subscriber1 = SubscriberForTesting()
+        subscriber2 = SubscriberForTesting()
+        subscriber3 = SubscriberForTesting()
+        
+        id1 = await queue.subscribe(subscriber1)
+        id2 = await queue.subscribe(subscriber2)
+        id3 = await queue.subscribe(subscriber3)
+        
+        # Unsubscribe the middle one
+        await queue.unsubscribe(id2)
+        
+        subscribers = await queue.list_subscribers()
+        
+        assert len(subscribers) == 2
+        assert id1 in subscribers
+        assert id2 not in subscribers
+        assert id3 in subscribers
+        assert subscribers[id1] is subscriber1
+        assert subscribers[id3] is subscriber3
+
+    @pytest.mark.asyncio
+    async def test_list_subscribers_returns_copy(self, queue, subscriber):
+        """Test that list_subscribers returns a copy, not the original dict"""
+        subscriber_id = await queue.subscribe(subscriber)
+        
+        subscribers = await queue.list_subscribers()
+        
+        # Modify the returned dict
+        subscribers.clear()
+        
+        # Original should be unchanged
+        original_subscribers = await queue.list_subscribers()
+        assert len(original_subscribers) == 1
+        assert subscriber_id in original_subscribers
+
+    @pytest.mark.asyncio
     async def test_publish_single_event_no_subscribers(self, queue, payload):
         """Test publishing an event with no subscribers"""
         await queue.publish(payload)

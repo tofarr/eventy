@@ -36,6 +36,14 @@ class EventQueue(Generic[T], ABC):
         """
 
     @abstractmethod
+    async def list_subscribers(self) -> dict[UUID, Subscriber[T]]:
+        """List all subscribers along with their IDs
+
+        Returns:
+            dict[UUID, Subscriber[T]]: A dictionary mapping subscriber IDs to their subscriber objects
+        """
+
+    @abstractmethod
     async def publish(self, payload: T) -> None:
         """Publish an event to this queue"""
 
