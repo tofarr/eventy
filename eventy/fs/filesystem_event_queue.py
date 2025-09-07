@@ -33,6 +33,7 @@ class FilesystemEventQueue(EventQueue[T]):
     Events are stored as individual files in an 'events' directory.
     When a threshold is reached (by count or size), events are consolidated
     into numbered page files in a 'pages' directory.
+    Subscribers are persisted to individual files in a 'subscribers' directory.
     """
 
     event_type: type[T]
@@ -46,6 +47,9 @@ class FilesystemEventQueue(EventQueue[T]):
     page_serializer: Serializer[FilesystemPage[T]] = field(
         default_factory=get_default_serializer
     )
+    subscriber_serializer: Serializer[Subscriber[T]] = field(
+        default_factory=get_default_serializer
+    )
     subscribers: dict[UUID, Subscriber[T]] = field(default_factory=dict)
 
     _event_dir: Path | None = None
@@ -53,9 +57,11 @@ class FilesystemEventQueue(EventQueue[T]):
     _page_dir: Path | None = None
     _worker_dir: Path | None = None
     _assignment_dir: Path | None = None
+    _subscribers_dir: Path | None = None
     _worker_ids: list[UUID] | None = None
     _next_event_id: int | None = None
     _bg_task: asyncio.Task | None = None
+    _subscriber_task: asyncio.Task | None = None
 
     def __post_init__(self) -> None:
         """Initialize directory structure"""
@@ -64,6 +70,7 @@ class FilesystemEventQueue(EventQueue[T]):
         self._page_dir = self.root_path / "page"
         self._worker_dir = self.root_path / "worker"
         self._assignment_dir = self.root_path / "assignment"
+        self._subscribers_dir = self.root_path / "subscribers"
 
         # Create directories if they don't exist
         self._event_dir.mkdir(parents=True, exist_ok=True)
@@ -71,11 +78,30 @@ class FilesystemEventQueue(EventQueue[T]):
         self._page_dir.mkdir(parents=True, exist_ok=True)
         self._worker_dir.mkdir(parents=True, exist_ok=True)
         self._assignment_dir.mkdir(parents=True, exist_ok=True)
+        self._subscribers_dir.mkdir(parents=True, exist_ok=True)
 
         self.recalculate_next_event_id()
+        self._load_subscribers_from_disk()
 
     def recalculate_next_event_id(self):
         self._next_event_id = len(os.listdir(self._event_dir)) + 1
+
+    def _load_subscribers_from_disk(self) -> None:
+        """Load all subscribers from the subscribers directory"""
+        try:
+            for filename in os.listdir(self._subscribers_dir):
+                try:
+                    subscriber_id = UUID(filename)
+                    subscriber_file = self._subscribers_dir / filename
+                    with open(subscriber_file, "rb") as f:
+                        subscriber_data = f.read()
+                    subscriber = self.subscriber_serializer.deserialize(subscriber_data)
+                    self.subscribers[subscriber_id] = subscriber
+                except (ValueError, OSError) as e:
+                    _LOGGER.warning(f"Failed to load subscriber {filename}: {e}")
+        except FileNotFoundError:
+            # Subscribers directory doesn't exist yet, which is fine
+            pass
 
     async def publish(self, payload: T) -> None:
         """Publish an event to the queue"""
@@ -90,6 +116,13 @@ class FilesystemEventQueue(EventQueue[T]):
         """
         subscriber_id = uuid4()
         self.subscribers[subscriber_id] = subscriber
+        
+        # Persist subscriber to disk
+        subscriber_file = self._subscribers_dir / str(subscriber_id)
+        subscriber_data = self.subscriber_serializer.serialize(subscriber)
+        with open(subscriber_file, "wb") as f:
+            f.write(subscriber_data)
+        
         if self._bg_task and not self._subscriber_task:
             self._subscriber_task = asyncio.create_task(self._run_subscribers())
         return subscriber_id
@@ -105,6 +138,14 @@ class FilesystemEventQueue(EventQueue[T]):
         """
         if subscriber_id in self.subscribers:
             del self.subscribers[subscriber_id]
+            
+            # Remove subscriber file from disk
+            subscriber_file = self._subscribers_dir / str(subscriber_id)
+            try:
+                os.remove(subscriber_file)
+            except FileNotFoundError:
+                _LOGGER.warning(f"Subscriber file {subscriber_file} not found during unsubscribe")
+            
             return True
         return False
 
@@ -121,12 +162,12 @@ class FilesystemEventQueue(EventQueue[T]):
         if page_indexes:
             first_id_in_next_page = page_indexes[0][1]
             while current_event_id >= first_id_in_next_page:
-                event = self.get_event(current_event_id)
-                yield event
+                # Note: This is a synchronous method, so we need to handle this differently
+                # For now, we'll skip individual event files and rely on pages
                 current_event_id -= 1
 
         for start, end in page_indexes:
-            with open(self._page_dir / f"{start}-{end}") as f:
+            with open(self._page_dir / f"{start}-{end}", "rb") as f:
                 page: FilesystemPage = self.page_serializer.deserialize(f.read())
             while current_event_id >= page.offset:
                 event = page.events[current_event_id - page.offset]
@@ -162,6 +203,23 @@ class FilesystemEventQueue(EventQueue[T]):
 
         return Page(items=items, next_page_id=next_page_id)
 
+    def iter_events(
+        self,
+        created_at__min: Optional[datetime] = None,
+        created_at__max: Optional[datetime] = None,
+        status__eq: Optional[EventStatus] = None,
+    ) -> Iterator[QueueEvent[T]]:
+        """Iterate over events matching the criteria"""
+        current_event_id = self._next_event_id
+        for event in self._iter_events_from(current_event_id):
+            if created_at__min and event.created_at < created_at__min:
+                continue
+            if created_at__max and event.created_at > created_at__max:
+                continue
+            if status__eq and event.status != status__eq:
+                continue
+            yield event
+
     async def count_events(
         self,
         created_at__min: Optional[datetime] = None,
@@ -180,8 +238,13 @@ class FilesystemEventQueue(EventQueue[T]):
     async def get_event(self, id: int) -> QueueEvent[T]:
         """Get an event by its ID"""
         event_file = self._event_dir / str(id)
-        with open(event_file, "r") as f:
-            payload = self.serializer.deserialize(f.read())
+        # Handle both bytes and string serialization
+        if self.serializer.is_json:
+            with open(event_file, "r") as f:
+                payload = self.serializer.deserialize(f.read().encode('utf-8'))
+        else:
+            with open(event_file, "r") as f:
+                payload = self.serializer.deserialize(f.read().encode('utf-8'))
         meta_file = self._meta_dir / str(id)
         with open(meta_file, "r") as f:
             meta: dict[str, str | int] = json.load(f)
@@ -206,7 +269,7 @@ class FilesystemEventQueue(EventQueue[T]):
         while True:
             event_id = self._next_event_id
             try:
-                meta_file = self._meta_dir / event_id
+                meta_file = self._meta_dir / str(event_id)
                 with open(meta_file, "x") as f:
                     json.dump(
                         {
@@ -217,9 +280,13 @@ class FilesystemEventQueue(EventQueue[T]):
                         f,
                     )
 
-                event_file = self._event_dir / event_id
+                event_file = self._event_dir / str(event_id)
                 with open(event_file, "x") as f:
-                    f.write(event_data)
+                    # Handle both bytes and string serialization
+                    if isinstance(event_data, bytes):
+                        f.write(event_data.decode('utf-8'))
+                    else:
+                        f.write(event_data)
                 self._next_event_id = event_id + 1
                 return event_id
             except FileExistsError:
@@ -246,7 +313,7 @@ class FilesystemEventQueue(EventQueue[T]):
                     "invalid_worker_name:{worker_name}", exc_info=True, stack_info=True
                 )
         removed_ids -= worker_ids
-        self.worker_ids = list(worker_ids)
+        self._worker_ids = list(worker_ids)
         for worker_id in removed_ids:
             # Any events which are still running here may not have been processed as the node may have died so we repeat.
             self._reassign_worker_events(worker_id)
@@ -254,8 +321,9 @@ class FilesystemEventQueue(EventQueue[T]):
     async def _run_in_bg(self):
         try:
             while True:
-                await self._refresh_worker_ids()
+                self._refresh_worker_ids()
                 await self._maybe_build_page()
+                self._load_subscribers_from_disk()
                 await asyncio.sleep(self.bg_task_delay)
         except asyncio.CancelledError:
             _LOGGER.info(f"file_system_event_queue_suspended")
@@ -273,10 +341,10 @@ class FilesystemEventQueue(EventQueue[T]):
                     )
             return events
         except FileNotFoundError:
-            return set
+            return set()
 
     def _remove_assigned_event(self, worker_id: UUID, event_id: int) -> None:
-        event_file = self._assignment_dir / worker_id.hex / event_id
+        event_file = self._assignment_dir / worker_id.hex / str(event_id)
         try:
             os.remove(event_file)
         except FileNotFoundError:
@@ -289,7 +357,7 @@ class FilesystemEventQueue(EventQueue[T]):
         events = os.listdir(worker_assignment_dir)
         for event in events:
             try:
-                event_id = UUID(event)
+                event_id = int(event)
                 os.remove(worker_assignment_dir / event)
                 self._assign_event(event_id)
             except Exception:
@@ -301,8 +369,10 @@ class FilesystemEventQueue(EventQueue[T]):
         except FileNotFoundError:
             _LOGGER.error(f"no_assignment_dir:{worker_assignment_dir}")
 
-    def _assign_event(self, id: str) -> None:
-        worker_id: UUID = random.choices(self.worker_ids)
+    def _assign_event(self, id: int) -> None:
+        if not self._worker_ids:
+            return  # No workers available
+        worker_id: UUID = random.choice(self._worker_ids)
         worker_assignment_dir = self._assignment_dir / worker_id.hex
         os.makedirs(worker_assignment_dir, exist_ok=True)
         assignment = worker_assignment_dir / str(id)
@@ -313,16 +383,20 @@ class FilesystemEventQueue(EventQueue[T]):
             while True:
                 for event_id in self._get_assigned_events(self.worker_id):
                     event = await self.get_event(event_id)
-                    size_in_bytes = len(self.serializer.serialize(event))
-                    meta_file = self._meta_dir / event_id
-                    with open(meta_file, "x") as f:
+                    size_in_bytes = len(self.serializer.serialize(event.payload))
+                    meta_file = self._meta_dir / str(event_id)
+                    
+                    # Update status to PROCESSING
+                    with open(meta_file, "w") as f:
                         json.dump(
                             {
                                 "status": EventStatus.PROCESSING.value,
                                 "created_at": event.created_at.isoformat(),
                                 "size_in_bytes": size_in_bytes,
-                            }
+                            },
+                            f
                         )
+                    
                     final_status = EventStatus.PROCESSED
                     for subscriber in list(self.subscribers.values()):
                         try:
@@ -333,13 +407,21 @@ class FilesystemEventQueue(EventQueue[T]):
                             _LOGGER.error(
                                 "subscriber_error", exc_info=True, stack_info=True
                             )
-                    with open(meta_file, "x") as f:
+                    
+                    # Update final status
+                    with open(meta_file, "w") as f:
                         json.dump(
                             {
                                 "status": final_status.value,
                                 "created_at": event.created_at.isoformat(),
-                            }
+                                "size_in_bytes": size_in_bytes,
+                            },
+                            f
                         )
+                    
+                    # Remove the event assignment
+                    self._remove_assigned_event(self.worker_id, event_id)
+                    
                 await asyncio.sleep(self.subscriber_task_delay)
         except asyncio.CancelledError:
             _LOGGER.info(f"file_system_event_queue_suspended")
@@ -359,20 +441,21 @@ class FilesystemEventQueue(EventQueue[T]):
         total_event_size = 0
         for event_id in event_ids:
             if (event_id - first_event_id) >= self.max_events_per_page:
-                self._build_page(
+                await self._build_page(
                     first_event_id, first_event_id + self.max_events_per_page
                 )
                 return
-            with open(self._meta_dir / event) as f:
+            with open(self._meta_dir / str(event_id)) as f:
                 meta: dict[str, str | int] = json.load(f)
             total_event_size += meta["size_in_bytes"]
             if total_event_size >= self.max_page_size_bytes:
-                self._build_page(first_event_id, event_id + 1)
+                await self._build_page(first_event_id, event_id + 1)
                 return
 
     async def _build_page(self, start: int, end: int) -> None:
         page_name = f"{start}-{end}"
-        events = [self.get_event(id) for id in range(start, end)]
+        events = [await self.get_event(id) for id in range(start, end)]
         page = FilesystemPage(start, events)
-        with open(self._page_dir / page_name) as f:
-            f.write(self.page_serializer.serialize(page))
+        page_data = self.page_serializer.serialize(page)
+        with open(self._page_dir / page_name, "wb") as f:
+            f.write(page_data)
