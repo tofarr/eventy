@@ -42,20 +42,26 @@ class EventQueue(Generic[T], ABC):
 
     @abstractmethod
     async def get_subscriber(self, subscriber_id: UUID) -> Subscriber[T]:
-        """ Get subscriber with id given """
+        """Get subscriber with id given"""
 
-    async def get_all_subscribers(self, subscriber_ids: list[UUID]) -> list[Subscription[T] | None]:
+    async def get_all_subscribers(
+        self, subscriber_ids: list[UUID]
+    ) -> list[Subscription[T] | None]:
         subscribers = []
         for subscriber_id in subscriber_ids:
             try:
                 subscriber = await self.get_subscriber(subscriber_id)
-                subscribers.append(Subscription(id=subscriber_id, subscription=subscriber))
+                subscribers.append(
+                    Subscription(id=subscriber_id, subscription=subscriber)
+                )
             except Exception:
                 subscribers.append(None)
         return subscribers
 
     @abstractmethod
-    async def search_subscribers(self, page_id: Optional[str], limit: int = 100) -> Page[Subscription[T]]:
+    async def search_subscribers(
+        self, page_id: Optional[str], limit: int = 100
+    ) -> Page[Subscription[T]]:
         """Get all subscribers along with their IDs
 
         Returns:

@@ -50,14 +50,16 @@ def add_queue_endpoints(
 
     subscriber_type = Union[
         tuple(
-            s for s in config.get_subscriber_types()
-            if s.payload_type == payload_type or issubclass(s.payload_type, payload_type)
+            s
+            for s in config.get_subscriber_types()
+            if s.payload_type == payload_type
+            or issubclass(s.payload_type, payload_type)
         )
     ]
 
     class SubscriptionResponse(BaseModel):
         id: UUID
-        subscriber: subscriber_type # type: ignore
+        subscriber: subscriber_type  # type: ignore
 
     class SubscriptionPage(BaseModel):
         items: list[SubscriptionResponse]  # type: ignore
@@ -99,10 +101,12 @@ def add_queue_endpoints(
         event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
         events = await event_queue.get_all_events(event_ids)
         return events
-    
+
     # TODO: Add an add_subscriber endpoint...
     @fastapi.get("/subscriber/search")
-    async def search_subscribers(page_id: str | None = None, limit: int = 100) -> SubscriptionPage:
+    async def search_subscribers(
+        page_id: str | None = None, limit: int = 100
+    ) -> SubscriptionPage:
         event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
         try:
             return await event_queue.search_subscribers(page_id, limit)
@@ -110,20 +114,20 @@ def add_queue_endpoints(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
     @fastapi.post("/subscriber")
-    async def add_subscriber(subscriber: subscriber_type) -> UUID: # type: ignore
+    async def add_subscriber(subscriber: subscriber_type) -> UUID:  # type: ignore
         event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
         subscription_id = await event_queue.subscribe(subscriber)
         return subscription_id
-    
+
     @fastapi.get("/subscriber/{id}")
-    async def get_subscriber(subscriber: subscriber_type) -> UUID: # type: ignore
+    async def get_subscriber(subscriber: subscriber_type) -> UUID:  # type: ignore
         event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
         try:
             subscriber = await event_queue.get_subscriber(id)
             return SubscriptionResponse(id, subscriber)
         except Exception:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    
+
     @fastapi.delete("/subscriber/{id}")
     async def remove_subscriber(id: UUID) -> bool:
         event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)

@@ -104,7 +104,9 @@ class MemoryEventQueue(EventQueue[T]):
                 raise KeyError(f"Subscriber {subscriber_id} not found")
             return self.subscribers[subscriber_id]
 
-    async def search_subscribers(self, page_id: Optional[str], limit: int = 100) -> Page[Subscription[T]]:
+    async def search_subscribers(
+        self, page_id: Optional[str], limit: int = 100
+    ) -> Page[Subscription[T]]:
         """Get all subscribers along with their IDs
 
         Returns:
@@ -116,7 +118,7 @@ class MemoryEventQueue(EventQueue[T]):
                 Subscription(id=sub_id, subscription=subscriber)
                 for sub_id, subscriber in self.subscribers.items()
             ]
-            
+
             # Handle pagination
             start_index = 0
             if page_id:
