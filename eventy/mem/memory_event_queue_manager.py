@@ -4,7 +4,6 @@ from datetime import timedelta
 from typing import TypeVar, Dict, Type, cast
 
 from eventy.event_queue import EventQueue
-from eventy.queue_event import QueueEvent
 from eventy.queue_manager import QueueManager
 from eventy.subscriber import Subscriber
 from eventy.mem.memory_event_queue import MemoryEventQueue

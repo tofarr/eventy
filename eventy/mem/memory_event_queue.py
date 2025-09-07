@@ -75,7 +75,7 @@ class MemoryEventQueue(EventQueue[T]):
             # Notify all subscribers
             event = self._reconstruct_event(len(self.events), stored_event)
             final_status = EventStatus.PROCESSING
-            for subscriber in self.subscribers:
+            for subscriber in list(self.subscribers):
                 try:
                     await subscriber.on_event(event)
                 except Exception:
