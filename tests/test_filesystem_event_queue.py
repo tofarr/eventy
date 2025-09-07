@@ -27,6 +27,24 @@ class PayloadForTesting:
     value: int
 
 
+@dataclass
+class BasePayload:
+    """Base payload class for inheritance testing"""
+    base_field: str
+
+
+@dataclass
+class DerivedPayload(BasePayload):
+    """Derived payload class for inheritance testing"""
+    derived_field: int
+
+
+@dataclass
+class UnrelatedPayload:
+    """Unrelated payload class for testing incompatible types"""
+    unrelated_field: float
+
+
 class PayloadJsonSerializer(JsonSerializer):
     """Custom JSON serializer that can handle PayloadForTesting objects"""
     
@@ -50,6 +68,61 @@ class SubscriberForTesting(Subscriber[PayloadForTesting]):
     async def on_event(self, event: QueueEvent[PayloadForTesting]) -> None:
         if self.should_raise:
             raise ValueError("Test error")
+        self.received_events.append(event)
+
+
+class BasePayloadSubscriber(Subscriber[BasePayload]):
+    """Subscriber for base payload type"""
+    
+    def __init__(self):
+        self.payload_type = BasePayload
+        self.received_events = []
+        
+    async def on_event(self, event: QueueEvent[BasePayload]) -> None:
+        self.received_events.append(event)
+
+
+class DerivedPayloadSubscriber(Subscriber[DerivedPayload]):
+    """Subscriber for derived payload type"""
+    
+    def __init__(self):
+        self.payload_type = DerivedPayload
+        self.received_events = []
+        
+    async def on_event(self, event: QueueEvent[DerivedPayload]) -> None:
+        self.received_events.append(event)
+
+
+class UnrelatedPayloadSubscriber(Subscriber[UnrelatedPayload]):
+    """Subscriber for unrelated payload type"""
+    
+    def __init__(self):
+        self.payload_type = UnrelatedPayload
+        self.received_events = []
+        
+    async def on_event(self, event: QueueEvent[UnrelatedPayload]) -> None:
+        self.received_events.append(event)
+
+
+class SubscriberWithoutPayloadType(Subscriber[PayloadForTesting]):
+    """Subscriber without payload_type attribute for testing validation"""
+    
+    def __init__(self):
+        self.received_events = []
+        # Intentionally not setting payload_type
+        
+    async def on_event(self, event: QueueEvent[PayloadForTesting]) -> None:
+        self.received_events.append(event)
+
+
+class SubscriberWithNonePayloadType(Subscriber[PayloadForTesting]):
+    """Subscriber with None payload_type for testing validation"""
+    
+    def __init__(self):
+        self.payload_type = None
+        self.received_events = []
+        
+    async def on_event(self, event: QueueEvent[PayloadForTesting]) -> None:
         self.received_events.append(event)
 
 
@@ -859,3 +932,82 @@ class TestFilesystemEventQueue:
         
         # Invalid file should still exist (not processed)
         assert invalid_worker.exists()
+
+    # Type validation tests
+    @pytest.mark.asyncio
+    async def test_subscribe_compatible_same_type(self, queue):
+        """Test subscribing with same payload type as queue"""
+        subscriber = SubscriberForTesting()
+        
+        # Should succeed - same type
+        subscriber_id = await queue.subscribe(subscriber)
+        assert subscriber_id is not None
+        
+        subscribers = await queue.list_subscribers()
+        assert len(subscribers) == 1
+        assert subscriber_id in subscribers
+
+    @pytest.mark.asyncio
+    async def test_subscribe_compatible_superclass(self, temp_dir):
+        """Test subscribing with superclass payload type"""
+        # Queue for derived type, subscriber for base type - should work
+        queue = FilesystemEventQueue(event_type=DerivedPayload, root_path=temp_dir)
+        subscriber = BasePayloadSubscriber()
+        
+        # Should succeed - DerivedPayload is subclass of BasePayload
+        subscriber_id = await queue.subscribe(subscriber)
+        assert subscriber_id is not None
+        
+        subscribers = await queue.list_subscribers()
+        assert len(subscribers) == 1
+        assert subscriber_id in subscribers
+
+    @pytest.mark.asyncio
+    async def test_subscribe_incompatible_subclass(self, temp_dir):
+        """Test subscribing with subclass payload type fails"""
+        # Queue for base type, subscriber for derived type - should fail
+        queue = FilesystemEventQueue(event_type=BasePayload, root_path=temp_dir)
+        subscriber = DerivedPayloadSubscriber()
+        
+        # Should fail - BasePayload is not subclass of DerivedPayload
+        with pytest.raises(TypeError) as exc_info:
+            await queue.subscribe(subscriber)
+        
+        assert "is not compatible" in str(exc_info.value)
+        assert "BasePayload" in str(exc_info.value)
+        assert "DerivedPayload" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_subscribe_incompatible_unrelated_type(self, queue):
+        """Test subscribing with unrelated payload type fails"""
+        subscriber = UnrelatedPayloadSubscriber()
+        
+        # Should fail - UnrelatedPayload is not related to PayloadForTesting
+        with pytest.raises(TypeError) as exc_info:
+            await queue.subscribe(subscriber)
+        
+        assert "is not compatible" in str(exc_info.value)
+        assert "PayloadForTesting" in str(exc_info.value)
+        assert "UnrelatedPayload" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_subscribe_missing_payload_type(self, queue):
+        """Test subscribing with missing payload_type attribute fails"""
+        subscriber = SubscriberWithoutPayloadType()
+        
+        # Should fail - no payload_type attribute
+        with pytest.raises(TypeError) as exc_info:
+            await queue.subscribe(subscriber)
+        
+        assert "must have a payload_type attribute" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    async def test_subscribe_none_payload_type(self, queue):
+        """Test subscribing with None payload_type fails"""
+        subscriber = SubscriberWithNonePayloadType()
+        
+        # Should fail - payload_type is None
+        with pytest.raises(TypeError) as exc_info:
+            await queue.subscribe(subscriber)
+        
+        assert "must have a payload_type attribute" in str(exc_info.value)

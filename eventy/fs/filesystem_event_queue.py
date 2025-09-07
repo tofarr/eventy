@@ -108,9 +108,27 @@ class FilesystemEventQueue(EventQueue[T]):
     async def subscribe(self, subscriber: Subscriber[T]) -> UUID:
         """Subscribe to events
 
+        Args:
+            subscriber: The subscriber to add. Its payload_type must be the same as or a superclass 
+                       of the queue's event_type.
+
         Returns:
             UUID: A unique identifier for the subscriber that can be used to unsubscribe
+            
+        Raises:
+            TypeError: If the subscriber's payload_type is not compatible with the queue's event_type
         """
+        # Validate that subscriber's payload_type is compatible with queue's event_type
+        if not hasattr(subscriber, 'payload_type') or subscriber.payload_type is None:
+            raise TypeError(f"Subscriber {subscriber} must have a payload_type attribute")
+        
+        if not issubclass(self.event_type, subscriber.payload_type):
+            raise TypeError(
+                f"Subscriber payload_type {subscriber.payload_type.__name__} is not compatible "
+                f"with queue event_type {self.event_type.__name__}. The queue's event_type must "
+                f"be the same as or a subclass of the subscriber's payload_type."
+            )
+        
         subscriber_id = uuid4()
         self.subscribers[subscriber_id] = subscriber
 
