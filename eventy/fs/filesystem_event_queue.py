@@ -213,10 +213,19 @@ class FilesystemEventQueue(EventQueue[T]):
         if created_at__max is None and created_at__min is None and status__eq is None:
             result = len(os.listdir(self._event_dir))
             return result
-        result = sum(
-            1 for _ in self.iter_events(created_at__min, created_at__max, status__eq)
-        )
-        return result
+        
+        # Count events by iterating through them with filters
+        count = 0
+        current_event_id = self._next_event_id
+        async for event in self._iter_events_from(current_event_id):
+            if created_at__min and event.created_at < created_at__min:
+                continue
+            if created_at__max and event.created_at > created_at__max:
+                continue
+            if status__eq and event.status != status__eq:
+                continue
+            count += 1
+        return count
 
     async def get_event(self, id: int) -> QueueEvent[T]:
         """Get an event by its ID"""
