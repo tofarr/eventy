@@ -72,6 +72,7 @@ class EventQueue(Generic[T], ABC):
             List of events matching the criteria
         """
 
+    @abstractmethod
     async def count_events(
         self,
         created_at__min: Optional[datetime] = None,
@@ -121,9 +122,9 @@ class EventQueue(Generic[T], ABC):
 
     async def get_all_events(self, event_ids: list[int]) -> list[QueueEvent[T] | None]:
         events = []
-        for event_id in events:
+        for event_id in event_ids:
             try:
-                event = self.get_event(event_id)
+                event = await self.get_event(event_id)
                 events.append(event)
             except Exception:
                 _LOGGER.warning('error_getting_event', exc_info=True, stack_info=True)

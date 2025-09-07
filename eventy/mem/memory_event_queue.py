@@ -16,7 +16,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
-class _StoredEvent:
+class StoredEvent:
     """Internal representation of a stored event with metadata and serialized payload"""
 
     serialized_payload: bytes
@@ -33,13 +33,13 @@ class MemoryEventQueue(EventQueue[T]):
 
     event_type: type[T]
     serializer: Serializer[T] = field(default_factory=get_default_serializer)
-    events: list[_StoredEvent] = field(default_factory=list)
+    events: list[StoredEvent] = field(default_factory=list)
     subscribers: dict[UUID, Subscriber[T]] = field(default_factory=dict)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     worker_id: UUID = field(default_factory=uuid4)
 
     def _reconstruct_event(
-        self, event_id: int, stored_event: _StoredEvent
+        self, event_id: int, stored_event: StoredEvent
     ) -> QueueEvent[T]:
         """Reconstruct a QueueEvent from a _StoredEvent"""
         payload = self.serializer.deserialize(stored_event.serialized_payload)
@@ -94,8 +94,8 @@ class MemoryEventQueue(EventQueue[T]):
                 return True
             return False
 
-    async def list_subscribers(self) -> dict[UUID, Subscriber[T]]:
-        """List all subscribers along with their IDs
+    async def get_subscribers(self) -> dict[UUID, Subscriber[T]]:
+        """Get all subscribers along with their IDs
 
         Returns:
             dict[UUID, Subscriber[T]]: A dictionary mapping subscriber IDs to their subscriber objects
@@ -111,7 +111,7 @@ class MemoryEventQueue(EventQueue[T]):
             # Serialize only the payload before storing to prevent mutations
             serialized_payload = self.serializer.serialize(payload)
 
-            stored_event = _StoredEvent(
+            stored_event = StoredEvent(
                 serialized_payload=serialized_payload,
             )
             self.events.append(stored_event)
