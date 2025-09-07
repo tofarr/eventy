@@ -15,6 +15,7 @@ from eventy.page import Page
 from eventy.queue_event import QueueEvent
 from eventy.serializers.serializer import Serializer, get_default_serializer
 from eventy.subscriber.subscriber import Subscriber
+from eventy.subscriber.subscription import Subscription
 
 T = TypeVar("T")
 _LOGGER = logging.getLogger(__name__)
@@ -56,7 +57,7 @@ class FilesystemEventQueue(EventQueue[T]):
 
         if self.worker_registry is None:
             self.worker_registry = FilesystemWorkerRegistry(
-                id=uuid4(),
+                worker_id=uuid4(),
                 worker_dir=self.root_dir / "worker",
             )
 
@@ -70,6 +71,7 @@ class FilesystemEventQueue(EventQueue[T]):
         if self.event_coordinator is None:
             self.event_coordinator = FilesystemEventCoordinator(
                 worker_registry=self.worker_registry,
+                event_store=self.event_store,
                 process_dir=self.root_dir / "process",
                 worker_event_dir=self.root_dir / "worker_event",
             )
@@ -166,8 +168,45 @@ class FilesystemEventQueue(EventQueue[T]):
             return True
         return False
 
-    async def get_subscribers(self) -> dict[UUID, Subscriber[T]]:
+    async def get_subscriber(self, subscriber_id: UUID) -> Subscriber[T]:
+        """Get subscriber with id given"""
+        if subscriber_id not in self.subscribers:
+            raise KeyError(f"Subscriber {subscriber_id} not found")
+        return self.subscribers[subscriber_id]
+
+    async def search_subscribers(self, page_id: Optional[str], limit: int = 100) -> Page[Subscription[T]]:
         """Get all subscribers along with their IDs
+
+        Returns:
+            Page[Subscription[T]]: A page of subscriptions with subscriber IDs and their subscriber objects
+        """
+        # Convert subscribers dict to list of Subscription objects
+        all_subscriptions = [
+            Subscription(id=sub_id, subscription=subscriber)
+            for sub_id, subscriber in self.subscribers.items()
+        ]
+        
+        # Handle pagination
+        start_index = 0
+        if page_id:
+            try:
+                start_index = int(page_id)
+            except (ValueError, TypeError):
+                start_index = 0
+
+        # Get the page of subscriptions
+        end_index = start_index + limit
+        page_subscriptions = all_subscriptions[start_index:end_index]
+
+        # Determine next page ID
+        next_page_id = None
+        if end_index < len(all_subscriptions):
+            next_page_id = str(end_index)
+
+        return Page(items=page_subscriptions, next_page_id=next_page_id)
+
+    async def list_subscribers(self) -> dict[UUID, Subscriber[T]]:
+        """Get all subscribers along with their IDs (backward compatibility method)
 
         Returns:
             dict[UUID, Subscriber[T]]: A dictionary mapping subscriber IDs to their subscriber objects

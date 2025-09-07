@@ -148,10 +148,9 @@ class TestFilesystemEventQueue:
         # Use custom JSON serializer to handle PayloadForTesting objects properly
         return FilesystemEventQueue(
             event_type=PayloadForTesting,
-            root_path=temp_dir,
-            bg_task_delay=1,  # Shorter delay for testing
-            subscriber_task_delay=1,
-            serializer=PayloadJsonSerializer(),
+            root_dir=temp_dir,
+            bg_task_sleep=1,  # Shorter delay for testing
+            subscriber_task_sleep=1,
         )
 
     @pytest.fixture

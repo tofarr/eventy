@@ -49,7 +49,7 @@ class EventQueue(Generic[T], ABC):
         for subscriber_id in subscriber_ids:
             try:
                 subscriber = await self.get_subscriber(subscriber_id)
-                subscribers.append(subscriber)
+                subscribers.append(Subscription(id=subscriber_id, subscription=subscriber))
             except Exception:
                 subscribers.append(None)
         return subscribers
