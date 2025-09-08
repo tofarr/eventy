@@ -1,5 +1,3 @@
-import logging
-import os
 from abc import ABC, abstractmethod
 from typing import Generic, TypeVar
 from uuid import UUID
@@ -7,8 +5,6 @@ from uuid import UUID
 from eventy.queue_event import QueueEvent
 
 T = TypeVar("T")
-
-logger = logging.getLogger(__name__)
 
 
 class Subscriber(Generic[T], ABC):
@@ -26,10 +22,4 @@ class Subscriber(Generic[T], ABC):
     async def on_worker_event(
         self, event: QueueEvent[T], current_worker_id: UUID, primary_worker_id: UUID
     ) -> None:
-        """
-        By default, run the callback only if the current worker matches the primary_worker_id worker.
-        Other implementations may vary (e.g.: checking against a predefined worker id, or always executing
-        the subscriber no matter the assigned worker)
-        """
-        if current_worker_id == primary_worker_id:
-            await self.on_event(event)
+        await self.on_event(event)

@@ -24,3 +24,8 @@ EVENTY_CONFIG = "EVENTY_CONFIG"
 Set this to a fully qualified class name to use a custom EventyConfig implementation.
 No default - this must be set to use the configuration system.
 """
+
+# Filesystem configuration
+EVENTY_ROOT_DIR = "EVENTY_ROOT_DIR"
+"""Environment variable to specify the root directory for file system based implementation
+"""

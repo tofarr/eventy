@@ -318,20 +318,20 @@ class AbstractEventQueueCase(ABC):
     # Subscriber search tests
 
     @pytest.mark.asyncio
-    async def test_search_subscribers_empty_queue(self, queue):
+    async def test_search_subscriptions_empty_queue(self, queue):
         """Test searching subscribers in an empty queue"""
-        page = await queue.search_subscribers(page_id=None, limit=10)
+        page = await queue.search_subscriptions(page_id=None, limit=10)
 
         assert isinstance(page.items, list)
         assert len(page.items) == 0
         assert page.next_page_id is None
 
     @pytest.mark.asyncio
-    async def test_search_subscribers_single_subscriber(self, queue, subscriber):
+    async def test_search_subscriptions_single_subscriber(self, queue, subscriber):
         """Test searching subscribers with a single subscriber"""
         subscriber_id = await queue.subscribe(subscriber)
 
-        page = await queue.search_subscribers(page_id=None, limit=10)
+        page = await queue.search_subscriptions(page_id=None, limit=10)
 
         assert len(page.items) == 1
         assert isinstance(page.items[0], Subscription)
@@ -340,7 +340,7 @@ class AbstractEventQueueCase(ABC):
         assert page.next_page_id is None
 
     @pytest.mark.asyncio
-    async def test_search_subscribers_multiple_subscribers(self, queue):
+    async def test_search_subscriptions_multiple_subscribers(self, queue):
         """Test searching subscribers with multiple subscribers"""
         subscribers = [MockSubscriber(f"sub{i}") for i in range(5)]
         subscriber_ids = []
@@ -349,7 +349,7 @@ class AbstractEventQueueCase(ABC):
             subscriber_id = await queue.subscribe(subscriber)
             subscriber_ids.append(subscriber_id)
 
-        page = await queue.search_subscribers(page_id=None, limit=10)
+        page = await queue.search_subscriptions(page_id=None, limit=10)
 
         assert len(page.items) == 5
 
@@ -359,7 +359,7 @@ class AbstractEventQueueCase(ABC):
         assert found_ids == expected_ids
 
     @pytest.mark.asyncio
-    async def test_search_subscribers_after_unsubscribe(self, queue):
+    async def test_search_subscriptions_after_unsubscribe(self, queue):
         """Test that unsubscribed subscribers don't appear in search results"""
         subscriber1 = MockSubscriber("sub1")
         subscriber2 = MockSubscriber("sub2")
@@ -372,7 +372,7 @@ class AbstractEventQueueCase(ABC):
         # Unsubscribe the middle one
         await queue.unsubscribe(id2)
 
-        page = await queue.search_subscribers(page_id=None, limit=10)
+        page = await queue.search_subscriptions(page_id=None, limit=10)
 
         assert len(page.items) == 2
         found_ids = {subscription.id for subscription in page.items}
@@ -381,7 +381,7 @@ class AbstractEventQueueCase(ABC):
         assert id3 in found_ids
 
     @pytest.mark.asyncio
-    async def test_search_subscribers_pagination(self, queue):
+    async def test_search_subscriptions_pagination(self, queue):
         """Test subscriber search pagination"""
         # Create more subscribers than the page limit
         subscribers = [MockSubscriber(f"sub{i}") for i in range(7)]
@@ -390,19 +390,19 @@ class AbstractEventQueueCase(ABC):
             await queue.subscribe(subscriber)
 
         # Get first page with limit of 3
-        page1 = await queue.search_subscribers(page_id=None, limit=3)
+        page1 = await queue.search_subscriptions(page_id=None, limit=3)
 
         assert len(page1.items) == 3
         assert page1.next_page_id is not None
 
         # Get second page
-        page2 = await queue.search_subscribers(page_id=page1.next_page_id, limit=3)
+        page2 = await queue.search_subscriptions(page_id=page1.next_page_id, limit=3)
 
         assert len(page2.items) == 3
         assert page2.next_page_id is not None
 
         # Get third page
-        page3 = await queue.search_subscribers(page_id=page2.next_page_id, limit=3)
+        page3 = await queue.search_subscriptions(page_id=page2.next_page_id, limit=3)
 
         assert len(page3.items) == 1  # Only 1 remaining
         assert page3.next_page_id is None
@@ -707,7 +707,7 @@ class AbstractEventQueueCase(ABC):
         )
 
         # All subscribers should be unsubscribed
-        page = await queue.search_subscribers(page_id=None, limit=20)
+        page = await queue.search_subscriptions(page_id=None, limit=20)
         assert len(page.items) == 0
 
     # Edge case tests

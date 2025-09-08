@@ -10,4 +10,4 @@ T = TypeVar("T")
 @dataclass
 class Subscription(Generic[T]):
     id: UUID
-    subscription: Subscriber[T]
+    subscriber: Subscriber[T]

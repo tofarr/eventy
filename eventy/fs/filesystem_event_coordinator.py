@@ -73,6 +73,7 @@ class FilesystemEventCoordinator(Generic[T]):
                         exc_info=True,
                         stack_info=True,
                     )
+        event_ids.sort()
         return set(event_ids)
 
     def mark_event_processed_for_current_worker(self, event_id: int) -> None:

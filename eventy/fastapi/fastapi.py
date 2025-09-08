@@ -104,12 +104,12 @@ def add_queue_endpoints(
 
     # TODO: Add an add_subscriber endpoint...
     @fastapi.get("/subscriber/search")
-    async def search_subscribers(
+    async def search_subscriptions(
         page_id: str | None = None, limit: int = 100
     ) -> SubscriptionPage:
         event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
         try:
-            return await event_queue.search_subscribers(page_id, limit)
+            return await event_queue.search_subscriptions(page_id, limit)
         except Exception:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 

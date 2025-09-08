@@ -135,7 +135,7 @@ class TestMemoryEventQueueComprehensive(AbstractEventQueueCase):
         async def search_operations():
             for _ in range(5):
                 await queue.search_events(limit=5)
-                await queue.search_subscribers(page_id=None, limit=5)
+                await queue.search_subscriptions(page_id=None, limit=5)
                 await asyncio.sleep(0.001)  # Small delay
 
         # Run operations concurrently

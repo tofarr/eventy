@@ -38,6 +38,15 @@ class MemoryEventQueue(EventQueue[T]):
     subscribers: dict[UUID, Subscriber[T]] = field(default_factory=dict)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     worker_id: UUID = field(default_factory=uuid4)
+    _running: bool = field(default=False, init=False)
+
+    async def __aenter__(self):
+        """ Start this event queue """
+        return self
+
+    async def __aexit__(self, exc_type, exc_value, traceback):
+        """ Close this event queue """
+        pass
 
     def _reconstruct_event(
         self, event_id: int, stored_event: StoredEvent
@@ -104,7 +113,7 @@ class MemoryEventQueue(EventQueue[T]):
                 raise KeyError(f"Subscriber {subscriber_id} not found")
             return self.subscribers[subscriber_id]
 
-    async def search_subscribers(
+    async def search_subscriptions(
         self, page_id: Optional[str], limit: int = 100
     ) -> Page[Subscription[T]]:
         """Get all subscribers along with their IDs
@@ -115,7 +124,7 @@ class MemoryEventQueue(EventQueue[T]):
         async with self.lock:
             # Convert subscribers dict to list of Subscription objects
             all_subscriptions = [
-                Subscription(id=sub_id, subscription=subscriber)
+                Subscription(id=sub_id, subscriber=subscriber)
                 for sub_id, subscriber in self.subscribers.items()
             ]
 
