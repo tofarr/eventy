@@ -16,10 +16,5 @@ class Subscriber(Generic[T], ABC):
     payload_type: type[T]
 
     @abstractmethod
-    async def on_event(self, event: QueueEvent[T]) -> None:
+    async def on_event(self, event: QueueEvent[T], current_worker_id: UUID, primary_worker_id: UUID) -> None:
         """Callback for when an event occurs"""
-
-    async def on_worker_event(
-        self, event: QueueEvent[T], current_worker_id: UUID, primary_worker_id: UUID
-    ) -> None:
-        await self.on_event(event)
