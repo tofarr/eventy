@@ -3,7 +3,7 @@ from datetime import datetime
 import logging
 from typing import Callable, Generic, TypeVar, Optional, AsyncIterator
 from uuid import UUID
-from eventy.event_status import EventStatus
+from eventy.event_result import EventResult
 from eventy.page import Page
 from eventy.queue_event import QueueEvent
 from eventy.subscriber.subscriber import Subscriber
@@ -14,12 +14,8 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class EventQueue(Generic[T], ABC):
-    """Event queue for distributed processing"""
-
-    worker_id: UUID
-    """ Identifier for current worker """
-    event_type: type[T]
-    """ Type of event handled by this queue """
+    """Event queue for distributed processin. Within the context of an event queue
+       results are only ever added - never updated or deleted """
 
     @abstractmethod
     async def __aenter__(self):
@@ -30,19 +26,29 @@ class EventQueue(Generic[T], ABC):
         """ Close this event queue """
 
     @abstractmethod
-    async def subscribe(self, subscriber: Subscriber[T]) -> UUID:
-        """Add a subscriber to this queue
+    def get_worker_id() -> UUID:
+        """
+        Get the id of the current worker - this is a unique id which differentiates the current object
+        from any others which may be subscribed - whether in the current process or anywhere outside it.
+        """
+
+    @abstractmethod
+    def get_payload_type() -> type[T]:
+        """ Get the type of payload handled by this queue """
+
+    @abstractmethod
+    async def subscribe(self, subscriber: Subscriber[T], check_subscriber_unique: bool = True, from_index: int | None = None) -> Subscription[T]:
+        """
+        Add a subscriber to this queue
+
+        Args:
+            subscriber: The subscriber to add
+            check_subscriber_unique: Check if the subscriber is equal to an existing one and return that if possible rather than creating a new one
+            from_index: The index of the event from which to subscribe
 
         Returns:
             UUID: A unique identifier for the subscriber that can be used to unsubscribe
         """
-
-    async def subscribe_if_unique(self, subscriber: Subscriber[T]) -> UUID:
-        """ Add the subscriber to the event queue only if an existing identical subscriber does not exist"""
-        async for subscription in self.iter_subscriptions():
-            if subscriber == subscription.subscriber:
-                return subscription.id
-        return await self.subscribe(subscriber)
 
     @abstractmethod
     async def unsubscribe(self, subscriber_id: UUID) -> bool:
@@ -59,7 +65,7 @@ class EventQueue(Generic[T], ABC):
     async def get_subscriber(self, subscriber_id: UUID) -> Subscriber[T]:
         """Get subscriber with id given"""
 
-    async def get_all_subscribers(
+    async def batch_get_subscriptions(
         self, subscriber_ids: list[UUID]
     ) -> list[Subscription[T] | None]:
         subscribers = []
@@ -83,107 +89,49 @@ class EventQueue(Generic[T], ABC):
             dict[UUID, Subscriber[T]]: A dictionary mapping subscriber IDs to their subscriber objects
         """
 
-    async def iter_subscriptions(
-        self,
-    ) -> AsyncIterator[Subscription[T]]:
-        """Create an async iterator over subscribers in the queue
-        """
-        page_id: Optional[str] = None
-
-        while True:
-            page = await self.search_subscriptions(page_id=page_id)
-
-            for subscription in page.items:
-                yield subscription
-
-            # If there's no next page, we're done
-            if page.next_page_id is None:
-                break
-
-            page_id = page.next_page_id
+    async def count_subscriptions(self) -> int:
+        count = sum(1 for subscription in self.iter_subscriptions())
+        return count
 
     @abstractmethod
     async def publish(self, payload: T) -> QueueEvent[T]:
         """Publish an event to this queue"""
 
     @abstractmethod
-    async def search_events(
-        self,
-        page_id: Optional[str] = None,
-        limit: int = 100,
-        created_at__min: Optional[datetime] = None,
-        created_at__max: Optional[datetime] = None,
-        status__eq: Optional[EventStatus] = None,
-    ) -> Page[QueueEvent[T]]:
-        """Get existing events from the queue with optional paging parameters
-
-        Args:
-            page_id: Optional page_id (typically extracted from a previous page)
-            limit: Optional maximum number of events to return
-            created_at__min: Optionally filter out events created before this
-            created_at__max: Optionally filter out events created after this
-            status__eq: Optionally filter events by status
-
-        Returns:
-            List of events matching the criteria
-        """
-
-    @abstractmethod
-    async def count_events(
-        self,
-        created_at__min: Optional[datetime] = None,
-        created_at__max: Optional[datetime] = None,
-        status__eq: Optional[EventStatus] = None,
-    ) -> int:
-        """Get the number of events matching the criteria given"""
-
-    async def iter_events(
-        self,
-        created_at__min: Optional[datetime] = None,
-        created_at__max: Optional[datetime] = None,
-        status__eq: Optional[EventStatus] = None,
-    ) -> AsyncIterator[QueueEvent[T]]:
-        """Create an async iterator over events in the queue
-
-        Args:
-            created_at__min: Optionally filter out events created before this datetime
-            created_at__max: Optionally filter out events created after this datetime
-            status__eq: Optionally filter events by status
-
-        Yields:
-            QueueEvent[T]: Individual events from the queue matching the criteria
-        """
-        page_id: Optional[str] = None
-
-        while True:
-            page = await self.search_events(
-                page_id=page_id,
-                created_at__min=created_at__min,
-                created_at__max=created_at__max,
-                status__eq=status__eq,
-            )
-
-            for event in page.items:
-                yield event
-
-            # If there's no next page, we're done
-            if page.next_page_id is None:
-                break
-
-            page_id = page.next_page_id
-
-    @abstractmethod
-    async def get_event(self, event_id: int) -> QueueEvent[T]:
+    async def get_result(self, result_id: UUID) -> EventResult:
         """Get an event given its id."""
 
-    async def get_all_events(self, event_ids: list[int]) -> list[QueueEvent[T] | None]:
-        events = []
-        for event_id in event_ids:
+    async def batch_get_results(self, result_ids: list[UUID]) -> list[EventResult | None]:
+        results = []
+        for result_id in result_ids:
             try:
-                event = await self.get_event(event_id)
-                events.append(event)
+                result = await self.get_result(result_id)
+                results.append(result)
             except Exception:
-                _LOGGER.warning("error_getting_event", exc_info=True, stack_info=True)
-                events.append(None)
+                _LOGGER.warning("error_getting_result", exc_info=True, stack_info=True)
+                results.append(None)
 
-        return events
+        return results
+
+    @abstractmethod
+    async def search_results(
+        self,
+        page_id: Optional[int] = None,
+        limit: int = 100,
+        event_id__eq: Optional[int] = None,
+        worker_id__eq: Optional[int] = None,
+        created_at__gte: Optional[datetime] = None,
+        created_at__lte: Optional[datetime] = None,
+    ) -> Page[EventResult]:
+        """Get existing results with optional paging parameters
+        """
+
+    @abstractmethod
+    async def count_results(
+        self,
+        event_id__eq: Optional[int] = None,
+        worker_id__eq: Optional[int] = None,
+        created_at__gte: Optional[datetime] = None,
+        created_at__lte: Optional[datetime] = None,
+    ) -> int:
+        """Get the number of events matching the criteria given"""
