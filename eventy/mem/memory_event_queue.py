@@ -59,7 +59,7 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
         """Get the id of the current worker"""
         return self.worker_id
     
-    async def get_worker_ids(self) -> UUID:
+    async def get_worker_ids(self) -> set[UUID]:
         """ Get the ids of all workers currently in the cluster. """
         self._check_entered()
         return { self.worker_id }

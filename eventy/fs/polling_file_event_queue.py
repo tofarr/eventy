@@ -35,6 +35,9 @@ class PollingFileEventQueue(AbstractFileEventQueue[T]):
         self.running = True
         self._stop_polling = False
         
+        # Start heartbeat system
+        await self._start_heartbeat()
+        
         # Start background polling tasks
         self._polling_task = asyncio.create_task(self._polling_loop())
         self._subscription_polling_task = asyncio.create_task(self._subscription_polling_loop())
@@ -64,6 +67,9 @@ class PollingFileEventQueue(AbstractFileEventQueue[T]):
                 await self._subscription_polling_task
             except asyncio.CancelledError:
                 pass
+        
+        # Stop heartbeat system
+        await self._stop_heartbeat()
         
         _LOGGER.info(f"Stopped polling file event queue at {self.root_dir}")
     
