@@ -23,10 +23,13 @@ class MyMessage:
     msg: str
 
 
+@dataclass
 class PrintSubscriber(Subscriber[MyMessage]):
     """Simple subscriber that prints received events to the console."""
     
-    payload_type = MyMessage
+    @property
+    def payload_type(self):
+        return MyMessage
     
     async def on_event(self, event: QueueEvent[MyMessage]) -> None:
         """Print the received event details."""
@@ -42,10 +45,10 @@ async def main():
     print("=" * 50)
     print()
     
-    # Create a memory queue manager and register our message type
+    # Create a queue manager and register our message type
     queue_manager = get_default_queue_manager()
     await queue_manager.register(MyMessage)
-    print("✅ Registered MyMessage with the memory queue manager")
+    print(f"✅ Registered MyMessage with the {queue_manager.__class__.__name__}")
     
     # Get the event queue for MyMessage payloads
     queue = await queue_manager.get_event_queue(MyMessage)
@@ -55,7 +58,7 @@ async def main():
         
         # Create and subscribe a print subscriber
         subscriber = PrintSubscriber()
-        subscriber_id = await queue.subscribe(subscriber)
+        subscriber_id = await queue.subscribe_if_unique(subscriber)
         print(f"✅ Subscribed PrintSubscriber with ID: {subscriber_id}")
         print()
         
@@ -71,8 +74,6 @@ async def main():
                 # Create and publish a new message
                 message = MyMessage(msg=f"Hello from eventy! Message #{message_count} at {current_time}")
                 event = await queue.publish(message)
-                if event.id == 10:
-                    break
                 
                 print(f"📤 Published message #{message_count} (Event ID: {event.id})")
                 

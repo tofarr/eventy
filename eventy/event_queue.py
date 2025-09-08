@@ -22,12 +22,27 @@ class EventQueue(Generic[T], ABC):
     """ Type of event handled by this queue """
 
     @abstractmethod
+    async def __aenter__(self):
+        """ Start this event queue"""
+
+    @abstractmethod
+    async def __aexit__(self, exc_type, exc_value, traceback):
+        """ Close this event queue """
+
+    @abstractmethod
     async def subscribe(self, subscriber: Subscriber[T]) -> UUID:
         """Add a subscriber to this queue
 
         Returns:
             UUID: A unique identifier for the subscriber that can be used to unsubscribe
         """
+
+    async def subscribe_if_unique(self, subscriber: Subscriber[T]) -> UUID:
+        """ Add the subscriber to the event queue only if an existing identical subscriber does not exist"""
+        async for subscription in self.iter_subscriptions():
+            if subscriber == subscription.subscriber:
+                return subscription.id
+        return await self.subscribe(subscriber)
 
     @abstractmethod
     async def unsubscribe(self, subscriber_id: UUID) -> bool:
@@ -52,14 +67,14 @@ class EventQueue(Generic[T], ABC):
             try:
                 subscriber = await self.get_subscriber(subscriber_id)
                 subscribers.append(
-                    Subscription(id=subscriber_id, subscription=subscriber)
+                    Subscription(id=subscriber_id, subscriber=subscriber)
                 )
             except Exception:
                 subscribers.append(None)
         return subscribers
 
     @abstractmethod
-    async def search_subscribers(
+    async def search_subscriptions(
         self, page_id: Optional[str], limit: int = 100
     ) -> Page[Subscription[T]]:
         """Get all subscribers along with their IDs
@@ -67,6 +82,25 @@ class EventQueue(Generic[T], ABC):
         Returns:
             dict[UUID, Subscriber[T]]: A dictionary mapping subscriber IDs to their subscriber objects
         """
+
+    async def iter_subscriptions(
+        self,
+    ) -> AsyncIterator[Subscription[T]]:
+        """Create an async iterator over subscribers in the queue
+        """
+        page_id: Optional[str] = None
+
+        while True:
+            page = await self.search_subscriptions(page_id=page_id)
+
+            for subscription in page.items:
+                yield subscription
+
+            # If there's no next page, we're done
+            if page.next_page_id is None:
+                break
+
+            page_id = page.next_page_id
 
     @abstractmethod
     async def publish(self, payload: T) -> QueueEvent[T]:

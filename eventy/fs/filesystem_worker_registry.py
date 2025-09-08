@@ -37,6 +37,8 @@ class FilesystemWorkerRegistry:
 
     async def __aenter__(self):
         if self._bg_task is None:
+            self._add_status()
+            self._refresh_worker_ids()
             self._bg_task = asyncio.create_task(self._run_bg_task())
 
     async def __aexit__(self, exc_type, exc_value, traceback):
@@ -56,7 +58,7 @@ class FilesystemWorkerRegistry:
     def _add_status(self):
         status_file = (
             self.worker_dir
-            / f"{self.worker_id.hex}-{int(time.time())}-{self.accepting_events}"
+            / f"{self.worker_id.hex}-{int(time.time())}-{int(self.accepting_events)}"
         )
         status_file.touch()
 
@@ -91,12 +93,12 @@ class FilesystemWorkerRegistry:
         worker_statuses: dict[UUID, FilesystemWorkerStatus] = {}
         for status in statuses:
             if status.timestamp < delete_threshold:
-                status_file = self.worker_dir / f"{status.worker_id}-{status.timestamp}"
+                status_file = self.worker_dir / f"{status.worker_id.hex}-{status.timestamp}-{int(status.accepting_events)}"
                 try:
                     status_file.unlink()
                 except Exception:
                     _LOGGER.error(
-                        f"error_removing_ping:{status_file}",
+                        f"error_removing_worker:{status_file}",
                         exc_info=True,
                         stack_info=True,
                     )

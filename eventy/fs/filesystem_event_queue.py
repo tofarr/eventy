@@ -258,7 +258,7 @@ class FilesystemEventQueue(EventQueue[T]):
             raise KeyError(f"Subscriber {subscriber_id} not found")
         return self.subscribers[subscriber_id]
 
-    async def search_subscribers(
+    async def search_subscriptions(
         self, page_id: Optional[str], limit: int = 100
     ) -> Page[Subscription[T]]:
         """Get all subscribers along with their IDs
@@ -268,7 +268,7 @@ class FilesystemEventQueue(EventQueue[T]):
         """
         # Convert subscribers dict to list of Subscription objects
         all_subscriptions = [
-            Subscription(id=sub_id, subscription=subscriber)
+            Subscription(id=sub_id, subscriber=subscriber)
             for sub_id, subscriber in self.subscribers.items()
         ]
 
