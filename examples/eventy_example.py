@@ -12,7 +12,7 @@ import asyncio
 from dataclasses import dataclass
 from datetime import datetime
 
-from eventy.mem.memory_queue_manager import MemoryQueueManager
+from eventy.queue_manager import get_default_queue_manager
 from eventy.subscriber.subscriber import Subscriber
 from eventy.queue_event import QueueEvent
 
@@ -43,7 +43,7 @@ async def main():
     print()
     
     # Create a memory queue manager and register our message type
-    queue_manager = MemoryQueueManager()
+    queue_manager = get_default_queue_manager()
     await queue_manager.register(MyMessage)
     print("✅ Registered MyMessage with the memory queue manager")
     
