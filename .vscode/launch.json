@@ -9,7 +9,11 @@
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",
-            "console": "integratedTerminal"
+            "console": "integratedTerminal",
+            "env": {
+                "DEBUG": "1",
+                "EVENTY_ROOT_DIR": "tmp"
+            },
         },
         {
             "name": "PyTest",

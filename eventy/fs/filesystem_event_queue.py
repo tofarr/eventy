@@ -87,6 +87,10 @@ class FilesystemEventQueue(EventQueue[T]):
             self._load_subscribers_from_disk()
         self._setup_filesystem_watches()
 
+    @property
+    def worker_id(self):
+        return self.worker_registry.worker_id
+
     def _load_subscribers_from_disk(self) -> None:
         """Load all subscribers from the subscribers directory"""
         subscribers = {}

@@ -20,10 +20,6 @@ class FilesystemQueueManager(QueueManager):
     """
 
     root_dir: Path
-    serializer: Serializer = field(default_factory=get_default_serializer)
-    max_age: timedelta | None = None
-    max_events_per_page: int = 25
-    max_page_size_bytes: int = 1024 * 1024  # 1MB
     queues: Dict[Type, FilesystemEventQueue] = field(default_factory=dict)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
@@ -61,10 +57,7 @@ class FilesystemQueueManager(QueueManager):
                 queue_dir = self._get_queue_directory(payload_type)
                 queue = FilesystemEventQueue[T](
                     event_type=payload_type,
-                    root_path=queue_dir,
-                    max_events_per_page=self.max_events_per_page,
-                    max_page_size_bytes=self.max_page_size_bytes,
-                    serializer=cast(Serializer[T], self.serializer),
+                    root_dir=queue_dir,
                 )
                 self.queues[payload_type] = queue
 

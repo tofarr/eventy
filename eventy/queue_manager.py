@@ -65,8 +65,9 @@ def get_default_queue_manager() -> QueueManager:
             if root_dir:
                 from eventy.fs.filesystem_queue_manager import FilesystemQueueManager
                 _default_queue_manager = FilesystemQueueManager(root_dir=root_dir)
-            from eventy.mem.memory_queue_manager import MemoryQueueManager
-            _default_queue_manager = MemoryQueueManager()
+            else:
+                from eventy.mem.memory_queue_manager import MemoryQueueManager
+                _default_queue_manager = MemoryQueueManager()
 
         try:
             config = get_config()
