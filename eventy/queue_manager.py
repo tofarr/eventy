@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import logging
 from typing import TypeVar, Optional
 
 from eventy.event_queue import EventQueue
@@ -6,6 +7,7 @@ from eventy.eventy_config import get_config
 from eventy.util import get_impl
 
 T = TypeVar("T")
+_LOGGER = logging.getLogger(__name__)
 
 
 class QueueManager(ABC):
@@ -57,8 +59,12 @@ def get_default_queue_manager() -> QueueManager:
         )
         _default_queue_manager = manager_class()
 
-        config = get_config()
-        for payload_type in config.get_payload_types():
-            _default_queue_manager.register(payload_type)
+        try:
+            config = get_config()
+            for payload_type in config.get_payload_types():
+                _default_queue_manager.register(payload_type)
+        except ValueError:
+            _LOGGER.info('no_initial_payload_types')
+
 
     return _default_queue_manager
