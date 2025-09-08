@@ -108,7 +108,13 @@ class AbstractEventQueueCase(ABC):
     @pytest_asyncio.fixture
     async def queue(self) -> EventQueue[MockPayload]:
         """Get a fresh EventQueue instance for testing"""
-        return self.get_event_queue()
+        queue = self.get_event_queue()
+        # Check if the queue supports async context management
+        if hasattr(queue, '__aenter__') and hasattr(queue, '__aexit__'):
+            async with queue:
+                yield queue
+        else:
+            yield queue
 
     @pytest.fixture
     def payload(self) -> MockPayload:
@@ -143,6 +149,12 @@ class AbstractEventQueueCase(ABC):
 
         event = await queue.publish(payload)
 
+        # Give background tasks time to process the event
+        if hasattr(queue, 'wait_for_processing'):
+            await queue.wait_for_processing()
+        else:
+            await asyncio.sleep(0.2)
+
         assert len(subscriber.received_events) == 1
         received_event = subscriber.received_events[0]
         assert received_event.payload.message == payload.message
@@ -169,6 +181,12 @@ class AbstractEventQueueCase(ABC):
         await queue.publish(payload1)
         await queue.publish(payload2)
 
+        # Give background tasks time to process the events
+        if hasattr(queue, 'wait_for_processing'):
+            await queue.wait_for_processing()
+        else:
+            await asyncio.sleep(0.2)
+
         # All subscribers should receive all events
         for subscriber in [subscriber1, subscriber2, subscriber3]:
             assert len(subscriber.received_events) == 2
@@ -189,6 +207,12 @@ class AbstractEventQueueCase(ABC):
 
         # This should not raise an exception
         await queue.publish(payload)
+
+        # Give background tasks time to process the event
+        if hasattr(queue, 'wait_for_processing'):
+            await queue.wait_for_processing()
+        else:
+            await asyncio.sleep(0.2)
 
         # Good subscriber should still receive the event
         assert len(good_subscriber.received_events) == 1
@@ -250,6 +274,12 @@ class AbstractEventQueueCase(ABC):
         # Publish first event - both should receive it
         await queue.publish(MockPayload("message1", 1))
 
+        # Give background tasks time to process the event
+        if hasattr(queue, 'wait_for_processing'):
+            await queue.wait_for_processing()
+        else:
+            await asyncio.sleep(0.2)
+
         assert len(subscriber1.received_events) == 1
         assert len(subscriber2.received_events) == 1
 
@@ -258,6 +288,12 @@ class AbstractEventQueueCase(ABC):
 
         # Publish second event - only subscriber2 should receive it
         await queue.publish(MockPayload("message2", 2))
+
+        # Give background tasks time to process the event
+        if hasattr(queue, 'wait_for_processing'):
+            await queue.wait_for_processing()
+        else:
+            await asyncio.sleep(0.2)
 
         assert len(subscriber1.received_events) == 1  # Still only 1
         assert len(subscriber2.received_events) == 2  # Now has 2
@@ -692,6 +728,13 @@ class AbstractEventQueueCase(ABC):
 
         # The publish operation should complete (exact timing depends on implementation)
         # but we verify both subscribers eventually get the event
+        
+        # Give background tasks time to process the event
+        if hasattr(queue, 'wait_for_processing'):
+            await queue.wait_for_processing()
+        else:
+            await asyncio.sleep(0.2)
+        
         assert len(slow_subscriber.received_events) == 1
         assert len(fast_subscriber.received_events) == 1
 
@@ -725,6 +768,12 @@ class AbstractEventQueueCase(ABC):
         for i in range(3):
             test_payload = MockPayload(f"message{i}", i)
             await queue.publish(test_payload)
+
+        # Give background tasks time to process the events
+        if hasattr(queue, 'wait_for_processing'):
+            await queue.wait_for_processing()
+        else:
+            await asyncio.sleep(0.2)
 
         # Good subscriber should have received all events
         assert len(good_subscriber.received_events) == 3

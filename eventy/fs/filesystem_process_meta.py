@@ -17,7 +17,7 @@ class FilesystemProcessMeta:
         }
 
 
-def from_json(self, value: dict[str, Any]):
+def from_json(value: dict[str, Any]):
     return FilesystemProcessMeta(
         primary_worker_id=UUID(value["primary_worker_id"]),
         worker_ids=[UUID(worker_id) for worker_id in value["worker_ids"]],
