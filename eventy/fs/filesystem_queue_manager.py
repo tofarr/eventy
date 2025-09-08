@@ -19,7 +19,7 @@ class FilesystemQueueManager(QueueManager):
     Each payload type gets its own subdirectory under the root directory.
     """
 
-    root_directory: Path
+    root_dir: Path
     serializer: Serializer = field(default_factory=get_default_serializer)
     max_age: timedelta | None = None
     max_events_per_page: int = 25
@@ -29,8 +29,8 @@ class FilesystemQueueManager(QueueManager):
 
     def __post_init__(self):
         """Initialize root directory"""
-        self.root_directory = Path(self.root_directory)
-        self.root_directory.mkdir(parents=True, exist_ok=True)
+        self.root_dir = Path(self.root_dir)
+        self.root_dir.mkdir(parents=True, exist_ok=True)
 
     def _get_queue_directory(self, payload_type: Type[T]) -> Path:
         """Get the directory path for a specific payload type"""
@@ -38,7 +38,7 @@ class FilesystemQueueManager(QueueManager):
         type_name = f"{payload_type.__module__}.{payload_type.__qualname__}"
         # Replace dots and other problematic characters with underscores
         safe_name = type_name.replace(".", "_").replace("<", "_").replace(">", "_")
-        return self.root_directory / safe_name
+        return self.root_dir / safe_name
 
     async def get_event_queue(self, payload_type: Type[T]) -> EventQueue[T]:
         """Get an event queue for the specified payload type"""
