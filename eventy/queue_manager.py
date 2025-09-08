@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import logging
+import os
 from typing import TypeVar, Optional
 
 from eventy.event_queue import EventQueue
@@ -52,12 +53,19 @@ def get_default_queue_manager() -> QueueManager:
     global _default_queue_manager
 
     if _default_queue_manager is None:
-        from eventy.mem.memory_queue_manager import MemoryQueueManager
-
-        manager_class = get_impl(
-            "EVENTY_QUEUE_MANAGER", QueueManager, MemoryQueueManager
-        )
-        _default_queue_manager = manager_class()
+        # Check environment...
+        try:
+            manager_class = get_impl(
+                "EVENTY_QUEUE_MANAGER", QueueManager
+            )
+            _default_queue_manager = manager_class()
+        except ValueError:
+            root_dir = os.getenv('EVENTY_ROOT_DIR')
+            if root_dir:
+                from eventy.fs.filesystem_queue_manager import FilesystemQueueManager
+                _default_queue_manager = FilesystemQueueManager(root_dir=root_dir)
+            from eventy.mem.memory_queue_manager import MemoryQueueManager
+            _default_queue_manager = MemoryQueueManager()
 
         try:
             config = get_config()
