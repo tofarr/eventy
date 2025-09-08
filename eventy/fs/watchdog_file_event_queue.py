@@ -262,7 +262,7 @@ class WatchdogFileEventQueue(AbstractFileEventQueue[T]):
         async for subscription in self._iter_subscriptions():
             subscriber_count += 1
             try:
-                await subscription.subscriber.on_event(event)
+                await subscription.subscriber.on_event(event, self.worker_id)
                 _LOGGER.debug(f"Notified subscriber {subscription.id} about event {event.id}")
             except Exception as e:
                 _LOGGER.error(f"Error notifying subscriber {subscription.id} about event {event.id}: {e}", exc_info=True)

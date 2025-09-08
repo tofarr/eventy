@@ -58,6 +58,11 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
     def get_worker_id(self) -> UUID:
         """Get the id of the current worker"""
         return self.worker_id
+    
+    async def get_worker_ids(self) -> UUID:
+        """ Get the ids of all workers currently in the cluster. """
+        self._check_entered()
+        return { self.worker_id }
 
     def get_payload_type(self) -> type[T]:
         """Get the type of payload handled by this queue"""
@@ -96,7 +101,7 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
                     )
                     # Process event asynchronously (fire and forget)
                     asyncio.create_task(
-                        subscriber.on_event(event, self.worker_id, self.worker_id)
+                        subscriber.on_event(event, self.worker_id)
                     )
 
         return subscription
@@ -170,7 +175,7 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
         # Notify all subscribers asynchronously
         for subscription in self._subscriptions.values():
             asyncio.create_task(
-                subscription.subscriber.on_event(event, self.worker_id, self.worker_id)
+                subscription.subscriber.on_event(event, self.worker_id)
             )
 
         return event

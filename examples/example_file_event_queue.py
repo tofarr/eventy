@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import tempfile
 import shutil
+from uuid import UUID
 
 # Add parent directory to path so we can import eventy
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -36,7 +37,7 @@ class EmailNotificationSubscriber(Subscriber[OrderEvent]):
     
     payload_type = OrderEvent
     
-    async def on_event(self, event: QueueEvent[OrderEvent]) -> None:
+    async def on_event(self, event: QueueEvent[OrderEvent], current_worker_id: UUID) -> None:
         """Process order event by sending email notification"""
         order = event.payload
         print(f"📧 Sending email notification for order {order.order_id}")
@@ -50,7 +51,7 @@ class InventoryUpdateSubscriber(Subscriber[OrderEvent]):
     
     payload_type = OrderEvent
     
-    async def on_event(self, event: QueueEvent[OrderEvent]) -> None:
+    async def on_event(self, event: QueueEvent[OrderEvent], current_worker_id: UUID) -> None:
         """Process order event by updating inventory"""
         order = event.payload
         print(f"📦 Updating inventory for order {order.order_id}")

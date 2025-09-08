@@ -54,7 +54,7 @@ class MyEvent:
 class MySubscriber(Subscriber[MyEvent]):
     payload_type = MyEvent
     
-    async def on_event(self, event: QueueEvent[MyEvent]) -> None:
+    async def on_event(self, event: QueueEvent[MyEvent], current_worker_id: UUID) -> None:
         print(f"Received: {event.payload.message}")
 
 async def main():
