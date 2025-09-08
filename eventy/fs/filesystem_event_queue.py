@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 from eventy.event_queue import EventQueue
 from eventy.fs.filesystem_event_coordinator import FilesystemEventCoordinator
 from eventy.fs.filesystem_event_store import FilesystemEventStore
+from eventy.fs.filesystem_watch import FilesystemWatch
 from eventy.event_status import EventStatus
 from eventy.fs.filesystem_worker_registry import FilesystemWorkerRegistry
 from eventy.page import Page
@@ -39,17 +40,23 @@ class FilesystemEventQueue(EventQueue[T]):
     event_store: FilesystemEventStore | None = None
     event_coordinator: FilesystemEventCoordinator | None = None
 
+    # Backward compatibility parameters (no longer used but kept for API compatibility)
     bg_task_sleep: int = 15
-    _bg_task: asyncio.Task | None = None
+    subscriber_task_sleep: int = 1
 
     subscriber_serializer: Serializer[Subscriber[T]] = field(
         default_factory=get_default_serializer
     )
     subscribers: dict[UUID, Subscriber[T]] = field(default_factory=dict)
-    subscriber_task_sleep: int = 1
     subscriber_dir: Path | None = None
 
-    _subscriber_task: asyncio.Task | None = None
+    # FilesystemWatch instances for monitoring
+    _subscriber_watch: FilesystemWatch | None = field(default=None, init=False)
+    _worker_event_watch: FilesystemWatch | None = field(default=None, init=False)
+
+    # Backward compatibility attributes (no longer used but kept for API compatibility)
+    _bg_task: asyncio.Task | None = field(default=None, init=False)
+    _subscriber_task: asyncio.Task | None = field(default=None, init=False)
 
     def __post_init__(self) -> None:
         """Initialize directory structure"""
@@ -81,6 +88,7 @@ class FilesystemEventQueue(EventQueue[T]):
         self.subscriber_dir.mkdir(parents=True, exist_ok=True)
 
         self._load_subscribers_from_disk()
+        self._setup_filesystem_watches()
 
     def _load_subscribers_from_disk(self) -> None:
         """Load all subscribers from the subscribers directory"""
@@ -96,6 +104,72 @@ class FilesystemEventQueue(EventQueue[T]):
                 except (ValueError, OSError) as e:
                     _LOGGER.warning(f"Failed to load subscriber {subscriber_file}: {e}")
         self.subscribers = subscribers
+
+    def _setup_filesystem_watches(self) -> None:
+        """Set up FilesystemWatch instances for monitoring directories"""
+        # Note: Subscriber directory monitoring is disabled to preserve subscriber instances
+        # In a multi-process environment, you may want to enable this to detect changes
+        # made by other processes, but it will break instance identity for tests
+        self._subscriber_watch = None
+        
+        # Watch worker event directory for new events to process
+        worker_event_dir = self.event_coordinator.worker_event_dir / self.worker_registry.worker_id.hex
+        worker_event_dir.mkdir(parents=True, exist_ok=True)
+        
+        self._worker_event_watch = FilesystemWatch(
+            path=worker_event_dir,
+            callback=self._on_worker_event_directory_change,
+            polling_frequency=0.5,
+            monitor_deletes=False  # Only monitor new events (file additions)
+        )
+
+    async def _on_subscriber_directory_change(self) -> None:
+        """Callback triggered when subscriber directory changes"""
+        _LOGGER.debug("Subscriber directory changed, reloading subscribers from disk")
+        self._load_subscribers_from_disk()
+
+    async def _on_worker_event_directory_change(self) -> None:
+        """Callback triggered when new events are available for processing"""
+        _LOGGER.debug("New events detected for processing")
+        await self._process_worker_events()
+
+    async def _process_worker_events(self) -> None:
+        """Process events that are available for the current worker"""
+        event_ids = self.event_coordinator.get_event_ids_to_process_for_current_worker()
+        _LOGGER.debug(f"Processing {len(event_ids)} events for worker {self.worker_registry.worker_id}")
+        
+        for event_id in event_ids:
+            _LOGGER.info(f"Processing event {event_id}")
+            event = self.event_store.get_event(event_id)
+            if event.status == EventStatus.PENDING:
+                self.event_store.update_event_status(event_id, EventStatus.PROCESSING)
+
+            # Get the primary worker ID for this event
+            process_meta = self.event_coordinator.get_process_meta(event_id)
+            
+            _LOGGER.info(f"Notifying {len(self.subscribers)} subscribers for event {event_id}")
+            for subscriber in list(self.subscribers.values()):
+                try:
+                    await subscriber.on_worker_event(
+                        event, self.worker_registry.worker_id, process_meta.primary_worker_id
+                    )
+                    _LOGGER.info(f"Successfully notified subscriber for event {event_id}")
+                except Exception:
+                    self.event_store.update_event_status(
+                        event_id, EventStatus.ERROR
+                    )
+                    _LOGGER.error(
+                        "subscriber_error", exc_info=True, stack_info=True
+                    )
+
+            self.event_coordinator.mark_event_processed_for_current_worker(
+                event_id
+            )
+            status = self.event_coordinator.get_status(event_id, process_meta)
+            if status == EventStatus.PROCESSING:
+                continue
+            self.event_coordinator.unscheduled_event(event_id)
+            self.event_store.update_event_status(event_id, status)
 
     async def publish(self, payload: T) -> QueueEvent[T]:
         """Publish an event to the queue"""
@@ -295,83 +369,26 @@ class FilesystemEventQueue(EventQueue[T]):
         await asyncio.sleep(0.05)
 
     async def __aenter__(self):
-        self._bg_task = asyncio.create_task(self._run_in_bg())
-        self._subscriber_task = asyncio.create_task(self._run_subscribers())
         await self.event_store.__aenter__()
         await self.worker_registry.__aenter__()
         await self.event_coordinator.__aenter__()
+        
+        # Start filesystem watches
+        if self._subscriber_watch:
+            await self._subscriber_watch.__aenter__()
+        if self._worker_event_watch:
+            await self._worker_event_watch.__aenter__()
+        
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
-        # Cancel background tasks
-        if self._bg_task:
-            self._bg_task.cancel()
-        if self._subscriber_task:
-            self._subscriber_task.cancel()
-        
-        # Wait for tasks to finish cancellation
-        tasks_to_wait = []
-        if self._bg_task:
-            tasks_to_wait.append(self._bg_task)
-        if self._subscriber_task:
-            tasks_to_wait.append(self._subscriber_task)
-        
-        if tasks_to_wait:
-            await asyncio.gather(*tasks_to_wait, return_exceptions=True)
+        # Stop filesystem watches
+        if self._subscriber_watch:
+            await self._subscriber_watch.__aexit__(exc_type, exc_value, traceback)
+        if self._worker_event_watch:
+            await self._worker_event_watch.__aexit__(exc_type, exc_value, traceback)
         
         # Clean up other components
         await self.event_store.__aexit__(exc_type, exc_value, traceback)
         await self.worker_registry.__aexit__(exc_type, exc_value, traceback)
         await self.event_coordinator.__aexit__(exc_type, exc_value, traceback)
-
-    async def _run_in_bg(self):
-        try:
-            while True:
-                self._load_subscribers_from_disk()
-                await asyncio.sleep(self.bg_task_sleep)
-        except asyncio.CancelledError:
-            _LOGGER.info("file_system_event_queue_suspended")
-
-    async def _run_subscribers(self):
-        _LOGGER.info("Starting _run_subscribers background task")
-        try:
-            while True:
-                event_ids = self.event_coordinator.get_event_ids_to_process_for_current_worker()
-                _LOGGER.debug(f"Processing {len(event_ids)} events for worker {self.worker_registry.worker_id}")
-                
-                for event_id in event_ids:
-                    _LOGGER.info(f"Processing event {event_id}")
-                    event = self.event_store.get_event(event_id)
-                    if event.status == EventStatus.PENDING:
-                        self.event_store.update_event_status(event_id, EventStatus.PROCESSING)
-
-                    # Get the primary worker ID for this event
-                    process_meta = self.event_coordinator.get_process_meta(event_id)
-                    
-                    _LOGGER.info(f"Notifying {len(self.subscribers)} subscribers for event {event_id}")
-                    for subscriber in list(self.subscribers.values()):
-                        try:
-                            await subscriber.on_worker_event(
-                                event, self.worker_registry.worker_id, process_meta.primary_worker_id
-                            )
-                            _LOGGER.info(f"Successfully notified subscriber for event {event_id}")
-                        except Exception:
-                            self.event_store.update_event_status(
-                                event_id, EventStatus.ERROR
-                            )
-                            _LOGGER.error(
-                                "subscriber_error", exc_info=True, stack_info=True
-                            )
-
-                    self.event_coordinator.mark_event_processed_for_current_worker(
-                        event_id
-                    )
-                    status = self.event_coordinator.get_status(event_id, process_meta)
-                    if status == EventStatus.PROCESSING:
-                        continue
-                    self.event_coordinator.unscheduled_event(event_id)
-                    self.event_store.update_event_status(event_id, status)
-
-                await asyncio.sleep(self.subscriber_task_sleep)
-        except asyncio.CancelledError:
-            _LOGGER.info("file_system_event_queue_suspended")

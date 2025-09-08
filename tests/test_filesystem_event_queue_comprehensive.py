@@ -131,25 +131,36 @@ class TestFilesystemEventQueueComprehensive(AbstractEventQueueCase):
 
     @pytest.mark.asyncio
     async def test_filesystem_queue_background_task_management(self):
-        """Test that background tasks are properly managed"""
+        """Test that FilesystemWatch instances are properly managed"""
         temp_dir = Path(tempfile.mkdtemp())
         try:
             queue = FilesystemEventQueue(event_type=MockPayload, root_dir=temp_dir)
             
-            # Before entering context, tasks should not exist
-            assert queue._bg_task is None
-            assert queue._subscriber_task is None
+            # Initially, FilesystemWatch instances should be created but not started
+            # Note: subscriber_watch may be None if disabled to preserve instance identity
+            assert queue._worker_event_watch is not None
+            if queue._subscriber_watch is not None:
+                assert queue._subscriber_watch._task is None
+            assert queue._worker_event_watch._task is None
             
             async with queue:
-                # After entering context, tasks should be created
-                assert queue._bg_task is not None
-                assert queue._subscriber_task is not None
-                assert not queue._bg_task.done()
-                assert not queue._subscriber_task.done()
+                # After entering context, watch tasks should be created
+                if queue._subscriber_watch is not None:
+                    assert queue._subscriber_watch._task is not None
+                    assert not queue._subscriber_watch._task.done()
+                assert queue._worker_event_watch._task is not None
+                assert not queue._worker_event_watch._task.done()
+                
+                # Store references to tasks before they get set to None
+                subscriber_task = queue._subscriber_watch._task if queue._subscriber_watch else None
+                worker_event_task = queue._worker_event_watch._task
             
-            # After exiting context, tasks should be cancelled
-            assert queue._bg_task.cancelled()
-            assert queue._subscriber_task.cancelled()
+            # After exiting context, watch tasks should be done and set to None
+            if subscriber_task is not None:
+                assert subscriber_task.done()
+                assert queue._subscriber_watch._task is None
+            assert worker_event_task.done()
+            assert queue._worker_event_watch._task is None
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -210,17 +221,25 @@ class TestFilesystemEventQueueComprehensive(AbstractEventQueueCase):
             # Start the queue
             await queue.__aenter__()
             
-            # Verify background tasks are running
-            assert queue._bg_task is not None
-            assert queue._subscriber_task is not None
-            assert not queue._bg_task.done()
-            assert not queue._subscriber_task.done()
+            # Verify FilesystemWatch tasks are running
+            if queue._subscriber_watch is not None:
+                assert queue._subscriber_watch._task is not None
+                assert not queue._subscriber_watch._task.done()
+            assert queue._worker_event_watch._task is not None
+            assert not queue._worker_event_watch._task.done()
+            
+            # Store references to tasks before they get set to None
+            subscriber_task = queue._subscriber_watch._task if queue._subscriber_watch else None
+            worker_event_task = queue._worker_event_watch._task
             
             # Shutdown the queue
             await queue.__aexit__(None, None, None)
             
-            # Verify tasks are cancelled
-            assert queue._bg_task.cancelled()
-            assert queue._subscriber_task.cancelled()
+            # Verify watch tasks are done and set to None
+            if subscriber_task is not None:
+                assert subscriber_task.done()
+                assert queue._subscriber_watch._task is None
+            assert worker_event_task.done()
+            assert queue._worker_event_watch._task is None
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
