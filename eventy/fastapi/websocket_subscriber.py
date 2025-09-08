@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
-from fastapi import WebSocket, WebSocketState
+from fastapi import WebSocket
+from starlette.websockets import WebSocketState
 from typing import TypeVar
 from uuid import UUID
 from eventy.queue_event import QueueEvent
@@ -28,7 +29,7 @@ class WebsocketSubscriber(Subscriber[T]):
         if websocket.application_state != WebSocketState.CONNECTED:
             return
         data = self.serializer.serialize(event)
-        await self.websocket.send_text(data)
+        await websocket.send_text(data)
 
     async def on_worker_event(
         self, event: QueueEvent[T], current_worker_id: UUID, primary_worker_id: UUID

@@ -1,6 +1,6 @@
 from datetime import datetime
 import logging
-from typing import TypeVar, Union
+from typing import TypeVar, Union, Dict, Any
 from uuid import UUID, uuid4
 from eventy.event_queue import EventQueue
 from eventy.event_status import EventStatus
@@ -14,8 +14,8 @@ from fastapi import (
     status,
     WebSocket,
     WebSocketDisconnect,
-    WebSocketState,
 )
+from starlette.websockets import WebSocketState
 from pydantic import BaseModel
 
 from eventy.subscriber.subscriber import Subscriber
@@ -29,6 +29,7 @@ def add_endpoints(fastapi: FastAPI, queue_manager: QueueManager, config: EventyC
     for payload_type in config.get_payload_types():
         router = APIRouter(prefix=f"/{payload_type.__name__}")
         add_queue_endpoints(router, payload_type, queue_manager, config)
+        fastapi.include_router(router)
 
 
 def add_queue_endpoints(
@@ -48,14 +49,22 @@ def add_queue_endpoints(
         items: list[payload_type]  # type: ignore
         next_page_id: str | None
 
-    subscriber_type = Union[
-        tuple(
-            s
-            for s in config.get_subscriber_types()
-            if s.payload_type == payload_type
+    # Get matching subscriber types
+    matching_subscribers = tuple(
+        s
+        for s in config.get_subscriber_types()
+        if hasattr(s, 'payload_type') and (
+            s.payload_type == payload_type
             or issubclass(s.payload_type, payload_type)
         )
-    ]
+    )
+    
+    # Handle empty subscriber types case
+    if matching_subscribers:
+        subscriber_type = Union[matching_subscribers]
+    else:
+        # Use a generic dict as fallback when no specific subscribers are available
+        subscriber_type = Dict[str, Any]
 
     class SubscriptionResponse(BaseModel):
         id: UUID
