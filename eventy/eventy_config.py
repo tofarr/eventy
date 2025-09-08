@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from eventy.constants import EVENTY_CONFIG
-from eventy.subscriber.subscriber import Subscriber
+from eventy.subscriber import Subscriber
 from eventy.util import get_impl
 
 
