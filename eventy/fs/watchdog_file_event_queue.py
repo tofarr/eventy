@@ -110,6 +110,9 @@ class WatchdogFileEventQueue(AbstractFileEventQueue[T]):
         self.running = True
         self._stop_processing = False
         
+        # Start heartbeat system
+        await self._start_heartbeat()
+        
         if WATCHDOG_AVAILABLE:
             await self._start_watchdog()
         else:
@@ -130,6 +133,9 @@ class WatchdogFileEventQueue(AbstractFileEventQueue[T]):
             await self._stop_watchdog()
         else:
             await self._stop_polling_fallback()
+        
+        # Stop heartbeat system
+        await self._stop_heartbeat()
         
         _LOGGER.info(f"Stopped watchdog file event queue at {self.root_dir}")
     
