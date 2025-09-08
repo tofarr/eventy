@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from eventy.constants import EVENTY_CONFIG
 from eventy.subscriber.subscriber import Subscriber
 from eventy.util import get_impl
 
@@ -16,5 +17,5 @@ class EventyConfig(ABC):
 
 
 def get_config() -> EventyConfig:
-    config_type = get_impl("EVENTY_CONFIG", EventyConfig)
+    config_type = get_impl(EVENTY_CONFIG, EventyConfig)
     return config_type()

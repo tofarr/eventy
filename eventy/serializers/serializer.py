@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import TypeVar, Generic
 
+from eventy.constants import EVENTY_SERIALIZER
 from eventy.util import get_impl
 
 T = TypeVar("T")
@@ -38,5 +39,5 @@ class Serializer(Generic[T], ABC):
 def get_default_serializer():
     from eventy.serializers.pickle_serializer import PickleSerializer
 
-    serializer_class = get_impl("EVENTY_SERIALIZER", Serializer, PickleSerializer)
+    serializer_class = get_impl(EVENTY_SERIALIZER, Serializer, PickleSerializer)
     return serializer_class()

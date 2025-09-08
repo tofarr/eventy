@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import TypeVar, Optional
 
+from eventy.constants import EVENTY_QUEUE_MANAGER
 from eventy.event_queue import EventQueue
 from eventy.eventy_config import get_config
 from eventy.util import get_impl
@@ -53,7 +54,7 @@ def get_default_queue_manager() -> QueueManager:
         from eventy.mem.memory_queue_manager import MemoryQueueManager
 
         manager_class = get_impl(
-            "EVENTY_QUEUE_MANAGER", QueueManager, MemoryQueueManager
+            EVENTY_QUEUE_MANAGER, QueueManager, MemoryQueueManager
         )
         _default_queue_manager = manager_class()
 
