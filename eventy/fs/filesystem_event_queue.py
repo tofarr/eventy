@@ -2,6 +2,7 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
+import os
 from pathlib import Path
 from typing import TypeVar, Optional
 from uuid import UUID, uuid4
@@ -40,23 +41,18 @@ class FilesystemEventQueue(EventQueue[T]):
     event_store: FilesystemEventStore | None = None
     event_coordinator: FilesystemEventCoordinator | None = None
 
-    # Backward compatibility parameters (no longer used but kept for API compatibility)
-    bg_task_sleep: int = 15
-    subscriber_task_sleep: int = 1
-
     subscriber_serializer: Serializer[Subscriber[T]] = field(
         default_factory=get_default_serializer
     )
     subscribers: dict[UUID, Subscriber[T]] = field(default_factory=dict)
     subscriber_dir: Path | None = None
+    sync_subscribers: bool = True
 
     # FilesystemWatch instances for monitoring
+    subscriber_watch_sleep: int = 15
+    worker_event_watch_sleep: int = 1
     _subscriber_watch: FilesystemWatch | None = field(default=None, init=False)
     _worker_event_watch: FilesystemWatch | None = field(default=None, init=False)
-
-    # Backward compatibility attributes (no longer used but kept for API compatibility)
-    _bg_task: asyncio.Task | None = field(default=None, init=False)
-    _subscriber_task: asyncio.Task | None = field(default=None, init=False)
 
     def __post_init__(self) -> None:
         """Initialize directory structure"""
@@ -87,7 +83,8 @@ class FilesystemEventQueue(EventQueue[T]):
             self.subscriber_dir = self.root_dir / "subscriber"
         self.subscriber_dir.mkdir(parents=True, exist_ok=True)
 
-        self._load_subscribers_from_disk()
+        if self.sync_subscribers:
+            self._load_subscribers_from_disk()
         self._setup_filesystem_watches()
 
     def _load_subscribers_from_disk(self) -> None:
@@ -107,20 +104,26 @@ class FilesystemEventQueue(EventQueue[T]):
 
     def _setup_filesystem_watches(self) -> None:
         """Set up FilesystemWatch instances for monitoring directories"""
-        # Note: Subscriber directory monitoring is disabled to preserve subscriber instances
-        # In a multi-process environment, you may want to enable this to detect changes
-        # made by other processes, but it will break instance identity for tests
-        self._subscriber_watch = None
-        
+        # Watch subscriber events directory for changes and update subscribers
+        if self.sync_subscribers:
+            self._subscriber_watch = FilesystemWatch(
+                path=self.subscriber_dir,
+                callback=self._on_subscriber_directory_change,
+                polling_frequency=self.subscriber_watch_sleep,
+                monitor_deletes=True,
+            )
+
         # Watch worker event directory for new events to process
-        worker_event_dir = self.event_coordinator.worker_event_dir / self.worker_registry.worker_id.hex
+        worker_event_dir = (
+            self.event_coordinator.worker_event_dir / self.worker_registry.worker_id.hex
+        )
         worker_event_dir.mkdir(parents=True, exist_ok=True)
-        
+
         self._worker_event_watch = FilesystemWatch(
             path=worker_event_dir,
             callback=self._on_worker_event_directory_change,
-            polling_frequency=0.5,
-            monitor_deletes=False  # Only monitor new events (file additions)
+            polling_frequency=self.worker_event_watch_sleep,
+            monitor_deletes=False,  # Only monitor new events (file additions)
         )
 
     async def _on_subscriber_directory_change(self) -> None:
@@ -136,8 +139,10 @@ class FilesystemEventQueue(EventQueue[T]):
     async def _process_worker_events(self) -> None:
         """Process events that are available for the current worker"""
         event_ids = self.event_coordinator.get_event_ids_to_process_for_current_worker()
-        _LOGGER.debug(f"Processing {len(event_ids)} events for worker {self.worker_registry.worker_id}")
-        
+        _LOGGER.debug(
+            f"Processing {len(event_ids)} events for worker {self.worker_registry.worker_id}"
+        )
+
         for event_id in event_ids:
             _LOGGER.info(f"Processing event {event_id}")
             event = self.event_store.get_event(event_id)
@@ -146,25 +151,25 @@ class FilesystemEventQueue(EventQueue[T]):
 
             # Get the primary worker ID for this event
             process_meta = self.event_coordinator.get_process_meta(event_id)
-            
-            _LOGGER.info(f"Notifying {len(self.subscribers)} subscribers for event {event_id}")
+
+            _LOGGER.info(
+                f"Notifying {len(self.subscribers)} subscribers for event {event_id}"
+            )
             for subscriber in list(self.subscribers.values()):
                 try:
                     await subscriber.on_worker_event(
-                        event, self.worker_registry.worker_id, process_meta.primary_worker_id
+                        event,
+                        self.worker_registry.worker_id,
+                        process_meta.primary_worker_id,
                     )
-                    _LOGGER.info(f"Successfully notified subscriber for event {event_id}")
+                    _LOGGER.info(
+                        f"Successfully notified subscriber for event {event_id}"
+                    )
                 except Exception:
-                    self.event_store.update_event_status(
-                        event_id, EventStatus.ERROR
-                    )
-                    _LOGGER.error(
-                        "subscriber_error", exc_info=True, stack_info=True
-                    )
+                    self.event_store.update_event_status(event_id, EventStatus.ERROR)
+                    _LOGGER.error("subscriber_error", exc_info=True, stack_info=True)
 
-            self.event_coordinator.mark_event_processed_for_current_worker(
-                event_id
-            )
+            self.event_coordinator.mark_event_processed_for_current_worker(event_id)
             status = self.event_coordinator.get_status(event_id, process_meta)
             if status == EventStatus.PROCESSING:
                 continue
@@ -300,10 +305,12 @@ class FilesystemEventQueue(EventQueue[T]):
     ) -> Page[QueueEvent[T]]:
         """Get events matching the criteria"""
 
-        current_event_id = self.event_store.next_event_id - 1  # Start from the last created event
+        current_event_id = (
+            self.event_store.next_event_id - 1
+        )  # Start from the last created event
         if page_id:
             current_event_id = int(page_id)
-        
+
         # If no events have been created yet, return empty page
         if current_event_id < 1:
             return Page(items=[], next_page_id=None)
@@ -343,28 +350,31 @@ class FilesystemEventQueue(EventQueue[T]):
     async def get_event(self, event_id: int) -> QueueEvent[T]:
         """Get an event by its ID"""
         return self.event_store.get_event(event_id)
-    
+
     async def wait_for_processing(self, timeout: float = 1.0) -> None:
         """Wait for background tasks to process pending events
-        
+
         This is primarily useful for testing to ensure events are processed
         before making assertions.
-        
+
         Args:
             timeout: Maximum time to wait in seconds
         """
         import time
+
         start_time = time.time()
-        
+
         while time.time() - start_time < timeout:
             # Check if there are any pending events to process
-            event_ids = self.event_coordinator.get_event_ids_to_process_for_current_worker()
+            event_ids = (
+                self.event_coordinator.get_event_ids_to_process_for_current_worker()
+            )
             if not event_ids:
                 # No pending events, wait a bit more to ensure processing is complete
                 await asyncio.sleep(0.05)
                 break
             await asyncio.sleep(0.05)
-        
+
         # Give a final small delay to ensure all async operations complete
         await asyncio.sleep(0.05)
 
@@ -372,22 +382,20 @@ class FilesystemEventQueue(EventQueue[T]):
         await self.event_store.__aenter__()
         await self.worker_registry.__aenter__()
         await self.event_coordinator.__aenter__()
-        
+
         # Start filesystem watches
         if self._subscriber_watch:
             await self._subscriber_watch.__aenter__()
-        if self._worker_event_watch:
-            await self._worker_event_watch.__aenter__()
-        
+        await self._worker_event_watch.__aenter__()
+
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
         # Stop filesystem watches
         if self._subscriber_watch:
             await self._subscriber_watch.__aexit__(exc_type, exc_value, traceback)
-        if self._worker_event_watch:
-            await self._worker_event_watch.__aexit__(exc_type, exc_value, traceback)
-        
+        await self._worker_event_watch.__aexit__(exc_type, exc_value, traceback)
+
         # Clean up other components
         await self.event_store.__aexit__(exc_type, exc_value, traceback)
         await self.worker_registry.__aexit__(exc_type, exc_value, traceback)

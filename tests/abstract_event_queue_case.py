@@ -110,7 +110,7 @@ class AbstractEventQueueCase(ABC):
         """Get a fresh EventQueue instance for testing"""
         queue = self.get_event_queue()
         # Check if the queue supports async context management
-        if hasattr(queue, '__aenter__') and hasattr(queue, '__aexit__'):
+        if hasattr(queue, "__aenter__") and hasattr(queue, "__aexit__"):
             async with queue:
                 yield queue
         else:
@@ -150,7 +150,7 @@ class AbstractEventQueueCase(ABC):
         event = await queue.publish(payload)
 
         # Give background tasks time to process the event
-        if hasattr(queue, 'wait_for_processing'):
+        if hasattr(queue, "wait_for_processing"):
             await queue.wait_for_processing()
         else:
             await asyncio.sleep(0.2)
@@ -182,7 +182,7 @@ class AbstractEventQueueCase(ABC):
         await queue.publish(payload2)
 
         # Give background tasks time to process the events
-        if hasattr(queue, 'wait_for_processing'):
+        if hasattr(queue, "wait_for_processing"):
             await queue.wait_for_processing()
         else:
             await asyncio.sleep(0.2)
@@ -209,7 +209,7 @@ class AbstractEventQueueCase(ABC):
         await queue.publish(payload)
 
         # Give background tasks time to process the event
-        if hasattr(queue, 'wait_for_processing'):
+        if hasattr(queue, "wait_for_processing"):
             await queue.wait_for_processing()
         else:
             await asyncio.sleep(0.2)
@@ -275,7 +275,7 @@ class AbstractEventQueueCase(ABC):
         await queue.publish(MockPayload("message1", 1))
 
         # Give background tasks time to process the event
-        if hasattr(queue, 'wait_for_processing'):
+        if hasattr(queue, "wait_for_processing"):
             await queue.wait_for_processing()
         else:
             await asyncio.sleep(0.2)
@@ -290,7 +290,7 @@ class AbstractEventQueueCase(ABC):
         await queue.publish(MockPayload("message2", 2))
 
         # Give background tasks time to process the event
-        if hasattr(queue, 'wait_for_processing'):
+        if hasattr(queue, "wait_for_processing"):
             await queue.wait_for_processing()
         else:
             await asyncio.sleep(0.2)
@@ -728,13 +728,13 @@ class AbstractEventQueueCase(ABC):
 
         # The publish operation should complete (exact timing depends on implementation)
         # but we verify both subscribers eventually get the event
-        
+
         # Give background tasks time to process the event
-        if hasattr(queue, 'wait_for_processing'):
+        if hasattr(queue, "wait_for_processing"):
             await queue.wait_for_processing()
         else:
             await asyncio.sleep(0.2)
-        
+
         assert len(slow_subscriber.received_events) == 1
         assert len(fast_subscriber.received_events) == 1
 
@@ -770,7 +770,7 @@ class AbstractEventQueueCase(ABC):
             await queue.publish(test_payload)
 
         # Give background tasks time to process the events
-        if hasattr(queue, 'wait_for_processing'):
+        if hasattr(queue, "wait_for_processing"):
             await queue.wait_for_processing()
         else:
             await asyncio.sleep(0.2)
