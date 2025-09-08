@@ -151,29 +151,57 @@ class TestFilesystemEventQueueComprehensive(AbstractEventQueueCase):
             # Note: subscriber_watch may be None if disabled to preserve instance identity
             assert queue._worker_event_watch is not None
             if queue._subscriber_watch is not None:
+                # Check appropriate fields based on monitoring mode
                 assert queue._subscriber_watch._task is None
+                assert queue._subscriber_watch._observer is None
             assert queue._worker_event_watch._task is None
+            assert queue._worker_event_watch._observer is None
 
             async with queue:
-                # After entering context, watch tasks should be created
+                # After entering context, appropriate resources should be created based on mode
                 if queue._subscriber_watch is not None:
-                    assert queue._subscriber_watch._task is not None
-                    assert not queue._subscriber_watch._task.done()
-                assert queue._worker_event_watch._task is not None
-                assert not queue._worker_event_watch._task.done()
+                    if queue._subscriber_watch.is_using_watchdog:
+                        assert queue._subscriber_watch._observer is not None
+                        assert queue._subscriber_watch._task is None
+                    else:
+                        assert queue._subscriber_watch._task is not None
+                        assert not queue._subscriber_watch._task.done()
+                        assert queue._subscriber_watch._observer is None
+                
+                if queue._worker_event_watch.is_using_watchdog:
+                    assert queue._worker_event_watch._observer is not None
+                    assert queue._worker_event_watch._task is None
+                else:
+                    assert queue._worker_event_watch._task is not None
+                    assert not queue._worker_event_watch._task.done()
+                    assert queue._worker_event_watch._observer is None
 
-                # Store references to tasks before they get set to None
-                subscriber_task = (
-                    queue._subscriber_watch._task if queue._subscriber_watch else None
-                )
+                # Store references to tasks/observers before they get set to None
+                subscriber_task = None
+                subscriber_observer = None
+                worker_event_task = None
+                worker_event_observer = None
+                
+                if queue._subscriber_watch is not None:
+                    subscriber_task = queue._subscriber_watch._task
+                    subscriber_observer = queue._subscriber_watch._observer
+                
                 worker_event_task = queue._worker_event_watch._task
+                worker_event_observer = queue._worker_event_watch._observer
 
-            # After exiting context, watch tasks should be done and set to None
-            if subscriber_task is not None:
-                assert subscriber_task.done()
+            # After exiting context, resources should be cleaned up
+            if queue._subscriber_watch is not None:
                 assert queue._subscriber_watch._task is None
-            assert worker_event_task.done()
+                assert queue._subscriber_watch._observer is None
+                # If we had a task, it should be done
+                if subscriber_task is not None:
+                    assert subscriber_task.done()
+            
             assert queue._worker_event_watch._task is None
+            assert queue._worker_event_watch._observer is None
+            # If we had a task, it should be done
+            if worker_event_task is not None:
+                assert worker_event_task.done()
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -245,27 +273,47 @@ class TestFilesystemEventQueueComprehensive(AbstractEventQueueCase):
             # Start the queue
             await queue.__aenter__()
 
-            # Verify FilesystemWatch tasks are running
+            # Verify FilesystemWatch resources are active based on monitoring mode
             if queue._subscriber_watch is not None:
-                assert queue._subscriber_watch._task is not None
-                assert not queue._subscriber_watch._task.done()
-            assert queue._worker_event_watch._task is not None
-            assert not queue._worker_event_watch._task.done()
+                if queue._subscriber_watch.is_using_watchdog:
+                    assert queue._subscriber_watch._observer is not None
+                    assert queue._subscriber_watch._task is None
+                else:
+                    assert queue._subscriber_watch._task is not None
+                    assert not queue._subscriber_watch._task.done()
+                    assert queue._subscriber_watch._observer is None
+            
+            if queue._worker_event_watch.is_using_watchdog:
+                assert queue._worker_event_watch._observer is not None
+                assert queue._worker_event_watch._task is None
+            else:
+                assert queue._worker_event_watch._task is not None
+                assert not queue._worker_event_watch._task.done()
+                assert queue._worker_event_watch._observer is None
 
-            # Store references to tasks before they get set to None
-            subscriber_task = (
-                queue._subscriber_watch._task if queue._subscriber_watch else None
-            )
+            # Store references to tasks/observers before they get set to None
+            subscriber_task = None
+            worker_event_task = None
+            
+            if queue._subscriber_watch is not None:
+                subscriber_task = queue._subscriber_watch._task
             worker_event_task = queue._worker_event_watch._task
 
             # Shutdown the queue
             await queue.__aexit__(None, None, None)
 
-            # Verify watch tasks are done and set to None
-            if subscriber_task is not None:
-                assert subscriber_task.done()
+            # Verify resources are cleaned up
+            if queue._subscriber_watch is not None:
                 assert queue._subscriber_watch._task is None
-            assert worker_event_task.done()
+                assert queue._subscriber_watch._observer is None
+                # If we had a task, it should be done
+                if subscriber_task is not None:
+                    assert subscriber_task.done()
+            
             assert queue._worker_event_watch._task is None
+            assert queue._worker_event_watch._observer is None
+            # If we had a task, it should be done
+            if worker_event_task is not None:
+                assert worker_event_task.done()
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)

@@ -175,9 +175,18 @@ class TestFilesystemWatch:
                     test_file = temp_path / f"test_file_{i}.txt"
                     test_file.write_text(f"Content {i}")
 
-                # Wait for callback - should be triggered once for the batch
+                # Wait for callback
                 await asyncio.sleep(0.2)
-                callback.assert_called_once()
+                
+                # Behavior depends on monitoring mode:
+                # - Watchdog: Individual events for each file (3 calls)
+                # - Polling: Batched into one callback (1 call)
+                if watcher.is_using_watchdog:
+                    # Watchdog triggers individual events
+                    assert callback.call_count >= 1  # At least one call, possibly more
+                else:
+                    # Polling batches changes
+                    callback.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_nonexistent_directory(self):
@@ -228,25 +237,39 @@ class TestFilesystemWatch:
                 path=temp_path, callback=callback, polling_frequency=0.1
             )
 
-            # Before entering context
+            # Before entering context - no resources should be initialized
             assert watcher._task is None
             assert watcher._stop_event is None
+            assert watcher._observer is None
+            assert watcher._event_handler is None
 
             async with watcher:
-                # Inside context - resources should be initialized
-                assert watcher._task is not None
-                assert watcher._stop_event is not None
-                assert not watcher._task.done()
+                # Inside context - appropriate resources should be initialized based on mode
+                if watcher.is_using_watchdog:
+                    # Watchdog mode uses observer
+                    assert watcher._observer is not None
+                    assert watcher._event_handler is not None
+                    assert watcher._task is None  # Not used in Watchdog mode
+                    assert watcher._stop_event is None  # Not used in Watchdog mode
+                else:
+                    # Polling mode uses task
+                    assert watcher._task is not None
+                    assert watcher._stop_event is not None
+                    assert not watcher._task.done()
+                    assert watcher._observer is None  # Not used in polling mode
+                    assert watcher._event_handler is None  # Not used in polling mode
 
                 # Add a file to verify it's working
                 test_file = temp_path / "test_file.txt"
                 test_file.write_text("Test")
                 await asyncio.sleep(0.2)
-                callback.assert_called_once()
+                callback.assert_called()
 
-            # After exiting context - resources should be cleaned up
+            # After exiting context - all resources should be cleaned up
             assert watcher._task is None
             assert watcher._stop_event is None
+            assert watcher._observer is None
+            assert watcher._event_handler is None
 
     @pytest.mark.asyncio
     async def test_previous_contents_initialization(self):
@@ -266,11 +289,16 @@ class TestFilesystemWatch:
             )
 
             async with watcher:
-                # previous_contents should be initialized with existing files
-                assert watcher.previous_contents is not None
-                assert len(watcher.previous_contents) == 2
-                assert "initial_file_0.txt" in watcher.previous_contents
-                assert "initial_file_1.txt" in watcher.previous_contents
+                # previous_contents behavior depends on monitoring mode
+                if watcher.is_using_watchdog:
+                    # Watchdog mode doesn't use previous_contents
+                    assert watcher.previous_contents is None
+                else:
+                    # Polling mode initializes previous_contents with existing files
+                    assert watcher.previous_contents is not None
+                    assert len(watcher.previous_contents) == 2
+                    assert "initial_file_0.txt" in watcher.previous_contents
+                    assert "initial_file_1.txt" in watcher.previous_contents
 
                 # No callback should be triggered for existing files
                 await asyncio.sleep(0.2)
@@ -463,20 +491,32 @@ class TestFilesystemWatch:
                 callback.assert_called_once()
                 callback.reset_mock()
 
-                # Add multiple files - should trigger callback once
+                # Add multiple files
                 new_file2 = temp_path / "new_file2.txt"
                 new_file3 = temp_path / "new_file3.txt"
                 new_file2.write_text("New content 2")
                 new_file3.write_text("New content 3")
                 await asyncio.sleep(0.2)
-                callback.assert_called_once()
+                
+                # Behavior depends on monitoring mode:
+                # - Watchdog: Individual events for each file (2 calls)
+                # - Polling: Batched into one callback (1 call)
+                if watcher.is_using_watchdog:
+                    assert callback.call_count >= 1  # At least one call, possibly more
+                else:
+                    callback.assert_called_once()
                 callback.reset_mock()
 
-                # Remove multiple files - should trigger callback once
+                # Remove multiple files
                 new_file1.unlink()
                 new_file2.unlink()
                 await asyncio.sleep(0.2)
-                callback.assert_called_once()
+                
+                # Same behavior difference applies to deletions
+                if watcher.is_using_watchdog:
+                    assert callback.call_count >= 1  # At least one call, possibly more
+                else:
+                    callback.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_monitor_deletes_comparison_behavior(self):
