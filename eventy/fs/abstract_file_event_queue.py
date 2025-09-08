@@ -50,8 +50,12 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
     # Event counter for generating sequential IDs
     _next_event_id: int = field(default=1, init=False)
     
-    # Track processed events to avoid duplicate processing
-    _processed_events: set = field(default_factory=set, init=False)
+    # Track the highest processed event ID to avoid duplicate processing
+    processed_event_id: int = field(default=0, init=False)
+    
+    # Cache subscriptions to avoid loading from disk for each event
+    _subscription_cache: dict = field(default_factory=dict, init=False)
+    _subscription_cache_dirty: bool = field(default=True, init=False)
     
     def __post_init__(self):
         """Initialize directory structure"""
@@ -69,6 +73,9 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
         
         # Initialize next event ID by checking existing events
         self._initialize_event_counter()
+        
+        # Initialize subscription cache
+        self._load_subscription_cache()
     
     def _initialize_event_counter(self):
         """Initialize the event counter based on existing events"""
@@ -100,18 +107,26 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
         """Publish an event to this queue"""
         self._check_running()
         
-        # Create event with sequential ID
-        event_id = self._next_event_id
-        self._next_event_id += 1
-        
-        event = QueueEvent(id=event_id, payload=payload)
-        
-        # Serialize and write event to file
-        event_file = self.events_dir / str(event_id)
-        event_data = self.event_serializer.serialize(event)
-        
-        with open(event_file, 'wb') as f:
-            f.write(event_data)
+        # Try to create event with sequential ID, recalculating if file exists
+        while True:
+            event_id = self._next_event_id
+            self._next_event_id += 1
+            
+            event = QueueEvent(id=event_id, payload=payload)
+            
+            # Serialize and write event to file using exclusive creation
+            event_file = self.events_dir / str(event_id)
+            event_data = self.event_serializer.serialize(event)
+            
+            try:
+                with open(event_file, 'xb') as f:
+                    f.write(event_data)
+                break  # Successfully created file, exit loop
+            except FileExistsError:
+                # File already exists, recalculate next_event_id and try again
+                _LOGGER.debug(f"Event file {event_file} already exists, recalculating next_event_id")
+                self._initialize_event_counter()
+                continue
         
         _LOGGER.info(f"Published event {event_id} to {event_file}")
         return event
@@ -133,7 +148,7 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
         
         # Check for existing subscriber if requested
         if check_subscriber_unique:
-            async for existing_subscription in self._iter_subscriptions():
+            for existing_subscription in self._get_cached_subscriptions():
                 if existing_subscription.subscriber == subscriber:
                     _LOGGER.info(f"Found existing subscription {existing_subscription.id} for subscriber")
                     return existing_subscription
@@ -142,12 +157,15 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
         subscriber_id = uuid4()
         subscription = Subscription(id=subscriber_id, subscriber=subscriber)
         
-        # Serialize and write subscriber to file
+        # Serialize and write subscriber to file using exclusive creation
         subscriber_file = self.subscriptions_dir / str(subscriber_id)
         subscriber_data = self.subscriber_serializer.serialize(subscriber)
         
-        with open(subscriber_file, 'wb') as f:
+        with open(subscriber_file, 'xb') as f:
             f.write(subscriber_data)
+        
+        # Add to cache
+        self._add_subscription_to_cache(subscription)
         
         _LOGGER.info(f"Added subscription {subscriber_id} to {subscriber_file}")
         return subscription
@@ -159,6 +177,8 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
         subscriber_file = self.subscriptions_dir / str(subscriber_id)
         if subscriber_file.exists():
             subscriber_file.unlink()
+            # Remove from cache
+            self._remove_subscription_from_cache(subscriber_id)
             _LOGGER.info(f"Removed subscription {subscriber_id}")
             return True
         return False
@@ -193,10 +213,8 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
         """Get all subscribers along with their IDs"""
         self._check_running()
         
-        # Collect all subscriptions
-        all_subscriptions = []
-        async for subscription in self._iter_subscriptions():
-            all_subscriptions.append(subscription)
+        # Get all subscriptions from cache
+        all_subscriptions = self._get_cached_subscriptions()
         
         # Handle pagination
         start_index = 0
@@ -306,18 +324,82 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
         result_file = self.results_dir / str(result.id)
         result_data = self.result_serializer.serialize(result)
         
-        with open(result_file, 'wb') as f:
+        with open(result_file, 'xb') as f:
             f.write(result_data)
         
         _LOGGER.info(f"Stored result {result.id} to {result_file}")
     
     def _mark_event_processed(self, event_id: int):
         """Mark an event as processed to avoid duplicate processing"""
-        self._processed_events.add(event_id)
+        if event_id > self.processed_event_id:
+            self.processed_event_id = event_id
     
     def _is_event_processed(self, event_id: int) -> bool:
         """Check if an event has already been processed"""
-        return event_id in self._processed_events
+        return event_id <= self.processed_event_id
+    
+    def _load_subscription_cache(self):
+        """Load all subscriptions into cache"""
+        self._subscription_cache.clear()
+        
+        if not self.subscriptions_dir.exists():
+            self._subscription_cache_dirty = False
+            return
+        
+        for subscriber_file in self.subscriptions_dir.iterdir():
+            try:
+                subscriber_id = UUID(subscriber_file.name)
+                with open(subscriber_file, 'rb') as f:
+                    subscriber_data = f.read()
+                subscriber = self.subscriber_serializer.deserialize(subscriber_data)
+                subscription = Subscription(id=subscriber_id, subscriber=subscriber)
+                self._subscription_cache[subscriber_id] = subscription
+                _LOGGER.debug(f"Loaded subscription {subscriber_id} into cache")
+            except (ValueError, OSError) as e:
+                _LOGGER.warning(f"Failed to load subscription {subscriber_file}: {e}")
+        
+        self._subscription_cache_dirty = False
+        _LOGGER.info(f"Loaded {len(self._subscription_cache)} subscriptions into cache")
+    
+    def _refresh_subscription_cache_if_needed(self):
+        """Refresh subscription cache if it's marked as dirty"""
+        if self._subscription_cache_dirty:
+            self._load_subscription_cache()
+    
+    def _mark_subscription_cache_dirty(self):
+        """Mark subscription cache as dirty (needs refresh)"""
+        self._subscription_cache_dirty = True
+    
+    def _add_subscription_to_cache(self, subscription: Subscription[T]):
+        """Add a subscription to the cache"""
+        self._subscription_cache[subscription.id] = subscription
+        _LOGGER.debug(f"Added subscription {subscription.id} to cache")
+    
+    def _remove_subscription_from_cache(self, subscriber_id: UUID):
+        """Remove a subscription from the cache"""
+        if subscriber_id in self._subscription_cache:
+            del self._subscription_cache[subscriber_id]
+            _LOGGER.debug(f"Removed subscription {subscriber_id} from cache")
+    
+    def _get_cached_subscriptions(self) -> list[Subscription[T]]:
+        """Get all cached subscriptions"""
+        self._refresh_subscription_cache_if_needed()
+        return list(self._subscription_cache.values())
+    
+    async def _notify_subscribers_cached(self, event: QueueEvent[T]):
+        """Notify all subscribers about an event using cached subscriptions"""
+        subscriptions = self._get_cached_subscriptions()
+        subscriber_count = len(subscriptions)
+        
+        for subscription in subscriptions:
+            try:
+                await subscription.subscriber.on_event(event, self.worker_id, self.worker_id)
+                _LOGGER.debug(f"Notified subscriber {subscription.id} about event {event.id}")
+            except Exception as e:
+                _LOGGER.error(f"Error notifying subscriber {subscription.id} about event {event.id}: {e}", exc_info=True)
+        
+        if subscriber_count > 0:
+            _LOGGER.info(f"Notified {subscriber_count} subscribers about event {event.id}")
     
     # Abstract methods that must be implemented by concrete subclasses
     @abstractmethod

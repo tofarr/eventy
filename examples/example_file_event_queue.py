@@ -36,7 +36,7 @@ class EmailNotificationSubscriber(Subscriber[OrderEvent]):
     
     payload_type = OrderEvent
     
-    async def on_event(self, event: QueueEvent[OrderEvent]) -> None:
+    async def on_event(self, event: QueueEvent[OrderEvent], current_worker_id=None, primary_worker_id=None) -> None:
         """Process order event by sending email notification"""
         order = event.payload
         print(f"📧 Sending email notification for order {order.order_id}")
@@ -50,7 +50,7 @@ class InventoryUpdateSubscriber(Subscriber[OrderEvent]):
     
     payload_type = OrderEvent
     
-    async def on_event(self, event: QueueEvent[OrderEvent]) -> None:
+    async def on_event(self, event: QueueEvent[OrderEvent], current_worker_id=None, primary_worker_id=None) -> None:
         """Process order event by updating inventory"""
         order = event.payload
         print(f"📦 Updating inventory for order {order.order_id}")
