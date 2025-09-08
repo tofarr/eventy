@@ -12,8 +12,8 @@ from eventy.event_result import EventResult
 from eventy.page import Page
 from eventy.queue_event import QueueEvent
 from eventy.serializers.serializer import Serializer, get_default_serializer
-from eventy.subscriber.subscriber import Subscriber
-from eventy.subscriber.subscription import Subscription
+from eventy.subscriber import Subscriber
+from eventy.subscription import Subscription
 
 T = TypeVar("T")
 _LOGGER = logging.getLogger(__name__)
