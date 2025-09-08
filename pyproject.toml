@@ -14,6 +14,9 @@ dependencies = [
     "pydantic (>=2.11.7,<3.0.0)"
 ]
 
+[project.optional-dependencies]
+watchdog = ["watchdog>=3.0.0"]
+
 [tool.poetry]
 packages = [{include = "eventy"}]
 
