@@ -21,6 +21,9 @@ packages = [{include = "eventy"}]
 server = [
     "fastapi", "uvicorn", "pydantic"
 ]
+redis = [
+    "redis>=5.0.0"
+]
 
 [tool.poetry.group.dev.dependencies]
 black = "^25.1.0"
