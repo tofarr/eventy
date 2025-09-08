@@ -26,14 +26,14 @@ class EventQueue(Generic[T], ABC):
         """ Close this event queue """
 
     @abstractmethod
-    def get_worker_id() -> UUID:
+    def get_worker_id(self) -> UUID:
         """
         Get the id of the current worker - this is a unique id which differentiates the current object
         from any others which may be subscribed - whether in the current process or anywhere outside it.
         """
 
     @abstractmethod
-    def get_payload_type() -> type[T]:
+    def get_payload_type(self) -> type[T]:
         """ Get the type of payload handled by this queue """
 
     @abstractmethod
