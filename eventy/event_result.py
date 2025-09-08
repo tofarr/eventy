@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 
-@dataclass
+@dataclass(frozen=True)
 class EventResult:
     worker_id: UUID
     event_id: int

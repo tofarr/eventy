@@ -5,7 +5,7 @@ from typing import Generic, TypeVar
 T = TypeVar("T")
 
 
-@dataclass
+@dataclass(frozen=True)
 class Page(Generic[T]):
     """Page of items"""
 
