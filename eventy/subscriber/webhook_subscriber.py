@@ -2,6 +2,7 @@ from http.client import HTTPResponse
 import logging
 from typing import TypeVar, Dict, Optional, Any
 from urllib.parse import urlparse
+from uuid import UUID
 
 import httpx
 
@@ -77,7 +78,7 @@ class WebhookSubscriber(Subscriber[T]):
             else:
                 self.headers["Content-Type"] = "application/octet-stream"
 
-    async def on_event(self, event: QueueEvent[T]) -> None:
+    async def on_event(self, event: QueueEvent[T], current_worker_id: UUID, primary_worker_id: UUID) -> None:
         """
         Handle an event by sending a webhook request.
 
