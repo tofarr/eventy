@@ -76,7 +76,7 @@ class FilesystemEventStore(Generic[T]):
 
     def iter_events_from(self, current_event_id: int) -> Iterator[QueueEvent[T]]:
         page_indexes = self._get_page_indexes()
-        
+
         if page_indexes:
             # Handle events newer than the most recent page
             first_id_in_next_page = page_indexes[0][1]

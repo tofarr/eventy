@@ -28,9 +28,10 @@ class TestFilesystemEventQueueComprehensive(AbstractEventQueueCase):
         # Create a temporary directory for each test
         temp_dir = Path(tempfile.mkdtemp())
         return FilesystemEventQueue(
-            event_type=MockPayload, 
+            event_type=MockPayload,
             root_dir=temp_dir,
-            subscriber_task_sleep=0.1  # Faster processing for tests
+            worker_event_watch_sleep=0.1,  # Faster processing for tests
+            sync_subscribers=False,
         )
 
     # FilesystemEventQueue-specific tests can be added here
@@ -40,12 +41,14 @@ class TestFilesystemEventQueueComprehensive(AbstractEventQueueCase):
         """Test FilesystemEventQueue-specific initialization"""
         temp_dir = Path(tempfile.mkdtemp())
         try:
-            async with FilesystemEventQueue(event_type=MockPayload, root_dir=temp_dir) as queue:
+            async with FilesystemEventQueue(
+                event_type=MockPayload, root_dir=temp_dir
+            ) as queue:
                 assert isinstance(queue, FilesystemEventQueue)
                 assert queue.event_type == MockPayload
                 assert queue.root_dir == temp_dir
                 assert queue.root_dir.exists()
-                
+
                 # Check that required directories are created
                 assert (queue.root_dir / "payload").exists()
                 assert (queue.root_dir / "page").exists()
@@ -63,20 +66,24 @@ class TestFilesystemEventQueueComprehensive(AbstractEventQueueCase):
         temp_dir = Path(tempfile.mkdtemp())
         try:
             from tests.abstract_event_queue_case import MockSubscriber
-            
+
             subscriber = MockSubscriber("persistent_sub")
             subscriber_id = None
-            
+
             # Create queue and add subscriber
-            async with FilesystemEventQueue(event_type=MockPayload, root_dir=temp_dir) as queue:
+            async with FilesystemEventQueue(
+                event_type=MockPayload, root_dir=temp_dir
+            ) as queue:
                 subscriber_id = await queue.subscribe(subscriber)
-                
+
                 # Check that subscriber file was created
                 subscriber_file = queue.subscriber_dir / subscriber_id.hex
                 assert subscriber_file.exists()
-            
+
             # Create a new queue instance with the same directory
-            async with FilesystemEventQueue(event_type=MockPayload, root_dir=temp_dir) as new_queue:
+            async with FilesystemEventQueue(
+                event_type=MockPayload, root_dir=temp_dir
+            ) as new_queue:
                 # Subscriber should be loaded from disk
                 assert subscriber_id in new_queue.subscribers
                 retrieved_subscriber = await new_queue.get_subscriber(subscriber_id)
@@ -90,19 +97,21 @@ class TestFilesystemEventQueueComprehensive(AbstractEventQueueCase):
         temp_dir = Path(tempfile.mkdtemp())
         try:
             from tests.abstract_event_queue_case import MockSubscriber
-            
-            async with FilesystemEventQueue(event_type=MockPayload, root_dir=temp_dir) as queue:
+
+            async with FilesystemEventQueue(
+                event_type=MockPayload, root_dir=temp_dir
+            ) as queue:
                 subscriber = MockSubscriber("cleanup_test")
                 subscriber_id = await queue.subscribe(subscriber)
-                
+
                 # Check that subscriber file exists
                 subscriber_file = queue.subscriber_dir / subscriber_id.hex
                 assert subscriber_file.exists()
-                
+
                 # Unsubscribe
                 result = await queue.unsubscribe(subscriber_id)
                 assert result is True
-                
+
                 # Check that subscriber file is removed
                 assert not subscriber_file.exists()
         finally:
@@ -113,14 +122,16 @@ class TestFilesystemEventQueueComprehensive(AbstractEventQueueCase):
         """Test that events are properly stored and can be retrieved"""
         temp_dir = Path(tempfile.mkdtemp())
         try:
-            async with FilesystemEventQueue(event_type=MockPayload, root_dir=temp_dir) as queue:
+            async with FilesystemEventQueue(
+                event_type=MockPayload, root_dir=temp_dir
+            ) as queue:
                 # Publish an event
                 payload = MockPayload("filesystem test", 789)
                 published_event = await queue.publish(payload)
-                
+
                 # Retrieve the event
                 retrieved_event = await queue.get_event(published_event.id)
-                
+
                 # Verify the event was properly stored and retrieved
                 assert retrieved_event.id == published_event.id
                 assert retrieved_event.payload.message == payload.message
@@ -131,25 +142,38 @@ class TestFilesystemEventQueueComprehensive(AbstractEventQueueCase):
 
     @pytest.mark.asyncio
     async def test_filesystem_queue_background_task_management(self):
-        """Test that background tasks are properly managed"""
+        """Test that FilesystemWatch instances are properly managed"""
         temp_dir = Path(tempfile.mkdtemp())
         try:
             queue = FilesystemEventQueue(event_type=MockPayload, root_dir=temp_dir)
-            
-            # Before entering context, tasks should not exist
-            assert queue._bg_task is None
-            assert queue._subscriber_task is None
-            
+
+            # Initially, FilesystemWatch instances should be created but not started
+            # Note: subscriber_watch may be None if disabled to preserve instance identity
+            assert queue._worker_event_watch is not None
+            if queue._subscriber_watch is not None:
+                assert queue._subscriber_watch._task is None
+            assert queue._worker_event_watch._task is None
+
             async with queue:
-                # After entering context, tasks should be created
-                assert queue._bg_task is not None
-                assert queue._subscriber_task is not None
-                assert not queue._bg_task.done()
-                assert not queue._subscriber_task.done()
-            
-            # After exiting context, tasks should be cancelled
-            assert queue._bg_task.cancelled()
-            assert queue._subscriber_task.cancelled()
+                # After entering context, watch tasks should be created
+                if queue._subscriber_watch is not None:
+                    assert queue._subscriber_watch._task is not None
+                    assert not queue._subscriber_watch._task.done()
+                assert queue._worker_event_watch._task is not None
+                assert not queue._worker_event_watch._task.done()
+
+                # Store references to tasks before they get set to None
+                subscriber_task = (
+                    queue._subscriber_watch._task if queue._subscriber_watch else None
+                )
+                worker_event_task = queue._worker_event_watch._task
+
+            # After exiting context, watch tasks should be done and set to None
+            if subscriber_task is not None:
+                assert subscriber_task.done()
+                assert queue._subscriber_watch._task is None
+            assert worker_event_task.done()
+            assert queue._worker_event_watch._task is None
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -158,13 +182,20 @@ class TestFilesystemEventQueueComprehensive(AbstractEventQueueCase):
         """Test that the correct directory structure is created"""
         temp_dir = Path(tempfile.mkdtemp())
         try:
-            async with FilesystemEventQueue(event_type=MockPayload, root_dir=temp_dir) as queue:
+            async with FilesystemEventQueue(
+                event_type=MockPayload, root_dir=temp_dir
+            ) as queue:
                 # Check all expected directories exist
                 expected_dirs = [
-                    "payload", "page", "meta", "worker", "process", 
-                    "worker_event", "subscriber"
+                    "payload",
+                    "page",
+                    "meta",
+                    "worker",
+                    "process",
+                    "worker_event",
+                    "subscriber",
                 ]
-                
+
                 for dir_name in expected_dirs:
                     dir_path = queue.root_dir / dir_name
                     assert dir_path.exists(), f"Directory {dir_name} should exist"
@@ -178,21 +209,25 @@ class TestFilesystemEventQueueComprehensive(AbstractEventQueueCase):
         temp_dir = Path(tempfile.mkdtemp())
         try:
             from tests.abstract_event_queue_case import MockSubscriber
-            
+
             # Create first queue instance and add a subscriber
-            async with FilesystemEventQueue(event_type=MockPayload, root_dir=temp_dir) as queue1:
+            async with FilesystemEventQueue(
+                event_type=MockPayload, root_dir=temp_dir
+            ) as queue1:
                 subscriber1 = MockSubscriber("shared_dir_test1")
                 subscriber_id1 = await queue1.subscribe(subscriber1)
-                
+
                 # Create second queue instance with same directory
-                async with FilesystemEventQueue(event_type=MockPayload, root_dir=temp_dir) as queue2:
+                async with FilesystemEventQueue(
+                    event_type=MockPayload, root_dir=temp_dir
+                ) as queue2:
                     # Second queue should load the subscriber from disk
                     assert subscriber_id1 in queue2.subscribers
-                    
+
                     # Add another subscriber to second queue
                     subscriber2 = MockSubscriber("shared_dir_test2")
                     subscriber_id2 = await queue2.subscribe(subscriber2)
-                    
+
                     # Both subscribers should be present
                     assert len(queue2.subscribers) == 2
                     assert subscriber_id1 in queue2.subscribers
@@ -206,21 +241,31 @@ class TestFilesystemEventQueueComprehensive(AbstractEventQueueCase):
         temp_dir = Path(tempfile.mkdtemp())
         try:
             queue = FilesystemEventQueue(event_type=MockPayload, root_dir=temp_dir)
-            
+
             # Start the queue
             await queue.__aenter__()
-            
-            # Verify background tasks are running
-            assert queue._bg_task is not None
-            assert queue._subscriber_task is not None
-            assert not queue._bg_task.done()
-            assert not queue._subscriber_task.done()
-            
+
+            # Verify FilesystemWatch tasks are running
+            if queue._subscriber_watch is not None:
+                assert queue._subscriber_watch._task is not None
+                assert not queue._subscriber_watch._task.done()
+            assert queue._worker_event_watch._task is not None
+            assert not queue._worker_event_watch._task.done()
+
+            # Store references to tasks before they get set to None
+            subscriber_task = (
+                queue._subscriber_watch._task if queue._subscriber_watch else None
+            )
+            worker_event_task = queue._worker_event_watch._task
+
             # Shutdown the queue
             await queue.__aexit__(None, None, None)
-            
-            # Verify tasks are cancelled
-            assert queue._bg_task.cancelled()
-            assert queue._subscriber_task.cancelled()
+
+            # Verify watch tasks are done and set to None
+            if subscriber_task is not None:
+                assert subscriber_task.done()
+                assert queue._subscriber_watch._task is None
+            assert worker_event_task.done()
+            assert queue._worker_event_watch._task is None
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
