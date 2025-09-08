@@ -44,7 +44,7 @@ class EventQueue(Generic[T], ABC):
         Args:
             subscriber: The subscriber to add
             check_subscriber_unique: Check if the subscriber is equal to an existing one and return that if possible rather than creating a new one
-            from_index: The index of the event from which to subscribe
+            from_index: The index of the event from which to subscribe (Events from this index will be immediately passed to the subscriber)
 
         Returns:
             UUID: A unique identifier for the subscriber that can be used to unsubscribe
