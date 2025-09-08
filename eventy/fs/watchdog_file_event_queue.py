@@ -47,6 +47,32 @@ class EventFileHandler(FileSystemEventHandler if WATCHDOG_AVAILABLE else object)
         return not self._pending_events.empty()
 
 
+class SubscriptionFileHandler(FileSystemEventHandler if WATCHDOG_AVAILABLE else object):
+    """File system event handler for subscription directory"""
+    
+    def __init__(self, queue):
+        super().__init__()
+        self.queue = queue
+    
+    def on_created(self, event):
+        """Handle subscription file creation"""
+        if WATCHDOG_AVAILABLE and not event.is_directory:
+            _LOGGER.debug(f"Subscription file created: {event.src_path}")
+            self.queue._mark_subscription_cache_dirty()
+    
+    def on_deleted(self, event):
+        """Handle subscription file deletion"""
+        if WATCHDOG_AVAILABLE and not event.is_directory:
+            _LOGGER.debug(f"Subscription file deleted: {event.src_path}")
+            self.queue._mark_subscription_cache_dirty()
+    
+    def on_modified(self, event):
+        """Handle subscription file modification"""
+        if WATCHDOG_AVAILABLE and not event.is_directory:
+            _LOGGER.debug(f"Subscription file modified: {event.src_path}")
+            self.queue._mark_subscription_cache_dirty()
+
+
 @dataclass
 class WatchdogFileEventQueue(AbstractFileEventQueue[T]):
     """
@@ -59,13 +85,16 @@ class WatchdogFileEventQueue(AbstractFileEventQueue[T]):
     
     # Watchdog configuration
     _observer: Observer = field(default=None, init=False)
+    _subscription_observer: Observer = field(default=None, init=False)
     _event_handler: EventFileHandler = field(default=None, init=False)
+    _subscription_handler: SubscriptionFileHandler = field(default=None, init=False)
     _processing_task: asyncio.Task = field(default=None, init=False)
     _stop_processing: bool = field(default=False, init=False)
     
     # Fallback polling configuration (used if watchdog is not available)
     polling_interval: float = field(default=1.0)
     _polling_task: asyncio.Task = field(default=None, init=False)
+    _subscription_polling_task: asyncio.Task = field(default=None, init=False)
     
     def __post_init__(self):
         super().__post_init__()
@@ -106,10 +135,17 @@ class WatchdogFileEventQueue(AbstractFileEventQueue[T]):
     
     async def _start_watchdog(self):
         """Start watchdog file monitoring"""
+        # Set up event monitoring
         self._event_handler = EventFileHandler(self)
         self._observer = Observer()
         self._observer.schedule(self._event_handler, str(self.events_dir), recursive=False)
         self._observer.start()
+        
+        # Set up subscription monitoring
+        self._subscription_handler = SubscriptionFileHandler(self)
+        self._subscription_observer = Observer()
+        self._subscription_observer.schedule(self._subscription_handler, str(self.subscriptions_dir), recursive=False)
+        self._subscription_observer.start()
         
         # Start background task to process events
         self._processing_task = asyncio.create_task(self._event_processing_loop())
@@ -117,7 +153,7 @@ class WatchdogFileEventQueue(AbstractFileEventQueue[T]):
         # Process any existing events
         await self._process_existing_events()
         
-        _LOGGER.info(f"Started watchdog monitoring on {self.events_dir}")
+        _LOGGER.info(f"Started watchdog monitoring on {self.events_dir} and {self.subscriptions_dir}")
     
     async def _stop_watchdog(self):
         """Stop watchdog file monitoring"""
@@ -125,6 +161,11 @@ class WatchdogFileEventQueue(AbstractFileEventQueue[T]):
             self._observer.stop()
             self._observer.join()
             self._observer = None
+        
+        if self._subscription_observer:
+            self._subscription_observer.stop()
+            self._subscription_observer.join()
+            self._subscription_observer = None
         
         # Cancel and wait for processing task
         if self._processing_task and not self._processing_task.done():
@@ -139,6 +180,7 @@ class WatchdogFileEventQueue(AbstractFileEventQueue[T]):
     async def _start_polling_fallback(self):
         """Start polling fallback when watchdog is not available"""
         self._polling_task = asyncio.create_task(self._polling_loop())
+        self._subscription_polling_task = asyncio.create_task(self._subscription_polling_loop())
         _LOGGER.info(f"Started polling fallback with interval {self.polling_interval}s")
     
     async def _stop_polling_fallback(self):
@@ -149,6 +191,14 @@ class WatchdogFileEventQueue(AbstractFileEventQueue[T]):
                 await self._polling_task
             except asyncio.CancelledError:
                 pass
+        
+        if self._subscription_polling_task and not self._subscription_polling_task.done():
+            self._subscription_polling_task.cancel()
+            try:
+                await self._subscription_polling_task
+            except asyncio.CancelledError:
+                pass
+        
         _LOGGER.info("Stopped polling fallback")
     
     async def _event_processing_loop(self):
@@ -249,23 +299,73 @@ class WatchdogFileEventQueue(AbstractFileEventQueue[T]):
             _LOGGER.error(f"Failed to deserialize event {event_id}: {e}")
             return
         
-        # Process event with all subscribers
-        await self._notify_subscribers(event)
+        # Process event with all subscribers using cache
+        await self._notify_subscribers_cached(event)
         
         # Mark as processed
         self._mark_event_processed(event_id)
     
-    async def _notify_subscribers(self, event):
-        """Notify all subscribers about an event"""
-        subscriber_count = 0
+    async def _subscription_polling_loop(self):
+        """Polling loop that monitors subscription directory for changes (fallback)"""
+        _LOGGER.debug("Starting subscription polling loop (fallback)")
         
-        async for subscription in self._iter_subscriptions():
-            subscriber_count += 1
+        # Track last modification times of subscription files
+        last_subscription_mtimes = {}
+        
+        try:
+            while not self._stop_processing:
+                try:
+                    await self._poll_for_subscription_changes(last_subscription_mtimes)
+                except Exception as e:
+                    _LOGGER.error(f"Error during subscription polling: {e}", exc_info=True)
+                
+                # Wait for next polling interval
+                await asyncio.sleep(self.polling_interval)
+        except asyncio.CancelledError:
+            _LOGGER.debug("Subscription polling loop cancelled")
+            raise
+        except Exception as e:
+            _LOGGER.error(f"Unexpected error in subscription polling loop: {e}", exc_info=True)
+        finally:
+            _LOGGER.debug("Subscription polling loop ended")
+    
+    async def _poll_for_subscription_changes(self, last_mtimes: dict):
+        """Poll for changes in the subscription directory (fallback)"""
+        if not self.subscriptions_dir.exists():
+            return
+        
+        current_files = set()
+        cache_needs_refresh = False
+        
+        # Check all subscription files
+        for subscription_file in self.subscriptions_dir.iterdir():
+            if not subscription_file.is_file():
+                continue
+                
+            current_files.add(subscription_file.name)
+            
             try:
-                await subscription.subscriber.on_event(event, self.worker_id)
-                _LOGGER.debug(f"Notified subscriber {subscription.id} about event {event.id}")
-            except Exception as e:
-                _LOGGER.error(f"Error notifying subscriber {subscription.id} about event {event.id}: {e}", exc_info=True)
+                current_mtime = subscription_file.stat().st_mtime
+                last_mtime = last_mtimes.get(subscription_file.name, 0)
+                
+                if current_mtime > last_mtime:
+                    _LOGGER.debug(f"Detected change in subscription file: {subscription_file.name}")
+                    last_mtimes[subscription_file.name] = current_mtime
+                    cache_needs_refresh = True
+                    
+            except OSError as e:
+                _LOGGER.warning(f"Error checking subscription file {subscription_file}: {e}")
         
-        if subscriber_count > 0:
-            _LOGGER.info(f"Notified {subscriber_count} subscribers about event {event.id}")
+        # Check for deleted files
+        deleted_files = set(last_mtimes.keys()) - current_files
+        if deleted_files:
+            _LOGGER.debug(f"Detected deleted subscription files: {deleted_files}")
+            for deleted_file in deleted_files:
+                del last_mtimes[deleted_file]
+            cache_needs_refresh = True
+        
+        # Refresh cache if needed
+        if cache_needs_refresh:
+            _LOGGER.info("Refreshing subscription cache due to detected changes")
+            self._mark_subscription_cache_dirty()
+    
