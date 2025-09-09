@@ -63,8 +63,8 @@ class TestPollingFileEventQueue(AbstractEventQueueTestBase):
         async with self.queue:
             event = await self.queue.publish("persistent_event")
             
-            # Check that event file exists
-            event_file = self.root_path / "events" / f"{event.id}.json"
+            # Check that event file exists (files are stored without extension, just the event ID)
+            event_file = self.root_path / "events" / str(event.id)
             self.assertTrue(event_file.exists())
             
             # Verify we can read the event back
