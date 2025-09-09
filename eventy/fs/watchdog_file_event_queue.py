@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import TypeVar
 
 from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler, FileCreatedEvent
+from watchdog.events import FileSystemEventHandler
 
 from eventy.fs.abstract_file_event_queue import AbstractFileEventQueue
 
@@ -78,8 +78,8 @@ class WatchdogFileEventQueue(AbstractFileEventQueue[T]):
     """
     
     # Watchdog configuration
-    _observer: Observer = field(default=None, init=False)
-    _subscription_observer: Observer = field(default=None, init=False)
+    _observer: Observer = field(default=None, init=False) # type: ignore
+    _subscription_observer: Observer = field(default=None, init=False) # type: ignore
     _event_handler: EventFileHandler = field(default=None, init=False)
     _subscription_handler: SubscriptionFileHandler = field(default=None, init=False)
     _processing_task: asyncio.Task = field(default=None, init=False)
