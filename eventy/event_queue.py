@@ -32,9 +32,7 @@ class EventQueue(Generic[T], ABC):
         from any others which may be subscribed - whether in the current process or anywhere outside it.
         """
 
-    @abstractmethod
-    async def get_worker_ids(self) -> set[UUID]:
-        """ Get the ids of all workers currently in the cluster. """
+
 
     @abstractmethod
     def get_payload_type(self) -> type[T]:

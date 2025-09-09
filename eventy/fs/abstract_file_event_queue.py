@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 
 from eventy.event_queue import EventQueue
 from eventy.event_result import EventResult
-from eventy.fs.file_heartbeat import FileHeartbeat
+
 from eventy.page import Page
 from eventy.queue_event import QueueEvent
 from eventy.serializers.serializer import Serializer, get_default_serializer
@@ -29,7 +29,6 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
     - Events are stored in an 'events' directory, one per file named by event ID
     - Results are stored in a 'results' directory, one per file named by result ID  
     - Subscribers are stored in a 'subscriptions' directory, one per file named by subscriber ID
-    - Workers are tracked via heartbeat files in a 'workers' directory
     - Each type of data uses its own serializer for storage
     
     Concrete subclasses must implement __aenter__ and __aexit__ methods.
@@ -43,19 +42,11 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
     result_serializer: Serializer[EventResult] = field(default_factory=get_default_serializer)
     subscriber_serializer: Serializer[Subscriber[T]] = field(default_factory=get_default_serializer)
     
-    # Heartbeat configuration
-    heartbeat_timeout: int = field(default=300)  # 5 minutes
-    heartbeat_interval: int = field(default=60)  # 1 minute
-    enable_heartbeat_cleanup: bool = field(default=True)
-    
     # Running state
     running: bool = field(default=False, init=False)
     
     # Worker ID for this instance
     worker_id: UUID = field(default_factory=uuid4)
-    
-    # Heartbeat system for worker discovery
-    _heartbeat: Optional[FileHeartbeat] = field(default=None, init=False)
     
     # Event counter for generating sequential IDs
     _next_event_id: int = field(default=1, init=False)
@@ -76,21 +67,10 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
         self.events_dir = self.root_dir / "events"
         self.results_dir = self.root_dir / "results" 
         self.subscriptions_dir = self.root_dir / "subscriptions"
-        self.workers_dir = self.root_dir / "workers"
         
         self.events_dir.mkdir(exist_ok=True)
         self.results_dir.mkdir(exist_ok=True)
         self.subscriptions_dir.mkdir(exist_ok=True)
-        self.workers_dir.mkdir(exist_ok=True)
-        
-        # Initialize heartbeat system
-        self._heartbeat = FileHeartbeat(
-            worker_id=self.worker_id,
-            workers_dir=self.workers_dir,
-            heartbeat_timeout=self.heartbeat_timeout,
-            heartbeat_interval=self.heartbeat_interval,
-            enable_cleanup=self.enable_heartbeat_cleanup
-        )
         
         # Initialize next event ID by checking existing events
         self._initialize_event_counter()
@@ -120,16 +100,7 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
         """Get the id of the current worker"""
         return self.worker_id
     
-    async def get_worker_ids(self) -> set[UUID]:
-        """Get the ids of all workers currently in the cluster."""
-        self._check_running()
-        
-        if self._heartbeat is None:
-            # Fallback: only return our own worker ID if heartbeat is not initialized
-            _LOGGER.warning("Heartbeat system not initialized, returning only current worker ID")
-            return {self.worker_id}
-        
-        return await self._heartbeat.get_active_worker_ids()
+
     
     def get_payload_type(self) -> type[T]:
         """Get the type of payload handled by this queue"""
@@ -433,20 +404,6 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
         if subscriber_count > 0:
             _LOGGER.info(f"Notified {subscriber_count} subscribers about event {event.id}")
     
-    # Heartbeat management methods for concrete subclasses
-    async def _start_heartbeat(self):
-        """Start the heartbeat system - should be called by concrete subclasses in __aenter__"""
-        if self._heartbeat is not None:
-            await self._heartbeat.start()
-            _LOGGER.info(f"Started heartbeat system for worker {self.worker_id}")
-        else:
-            _LOGGER.warning("Heartbeat system not initialized, cannot start")
-
-    async def _stop_heartbeat(self):
-        """Stop the heartbeat system - should be called by concrete subclasses in __aexit__"""
-        if self._heartbeat is not None:
-            await self._heartbeat.stop()
-            _LOGGER.info(f"Stopped heartbeat system for worker {self.worker_id}")
     
     # Abstract methods that must be implemented by concrete subclasses
     @abstractmethod
