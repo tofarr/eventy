@@ -62,12 +62,12 @@ def get_default_queue_manager() -> QueueManager:
             _default_queue_manager = manager_class()
         except ValueError:
             root_dir = os.getenv(EVENTY_ROOT_DIR)
-            if root_dir:
-                from eventy.fs.filesystem_queue_manager import FilesystemQueueManager
-                _default_queue_manager = FilesystemQueueManager(root_dir=root_dir)
-            else:
-                from eventy.mem.memory_queue_manager import MemoryQueueManager
-                _default_queue_manager = MemoryQueueManager()
+            #if root_dir:
+            #    from eventy.fs.filesystem_queue_manager import FilesystemQueueManager
+            #    _default_queue_manager = FilesystemQueueManager(root_dir=root_dir)
+            #else:
+            from eventy.mem.memory_queue_manager import MemoryQueueManager
+            _default_queue_manager = MemoryQueueManager()
 
         try:
             config = get_config()

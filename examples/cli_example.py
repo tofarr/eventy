@@ -12,6 +12,7 @@ import asyncio
 from dataclasses import dataclass
 from datetime import datetime
 
+from eventy.event_queue import EventQueue
 from eventy.queue_manager import get_default_queue_manager
 from eventy.subscribers.subscriber import Subscriber
 from eventy.queue_event import QueueEvent
@@ -31,7 +32,7 @@ class PrintSubscriber(Subscriber[MyMessage]):
     def payload_type(self):
         return MyMessage
     
-    async def on_event(self, event: QueueEvent[MyMessage]) -> None:
+    async def on_event(self, event: QueueEvent[MyMessage], event_queue: EventQueue[MyMessage]) -> None:
         """Print the received event details."""
         print(f"📨 Received event #{event.id} at {event.created_at.strftime('%H:%M:%S')}")
         print(f"   Message: {event.payload.msg}")
@@ -46,55 +47,56 @@ async def main():
     
     # Create a queue manager and register our message type
     queue_manager = get_default_queue_manager()
-    await queue_manager.register(MyMessage)
-    print(f"✅ Registered MyMessage with the {queue_manager.__class__.__name__}")
-    
-    # Get the event queue for MyMessage payloads
-    queue = await queue_manager.get_event_queue(MyMessage)
-    async with queue:
+    async with queue_manager:
+        await queue_manager.register(MyMessage)
+        print(f"✅ Registered MyMessage with the {queue_manager.__class__.__name__}")
+        
+        # Get the event queue for MyMessage payloads
+        queue = await queue_manager.get_event_queue(MyMessage)
+        async with queue:
 
-        print(f"✅ Retrieved event queue with worker ID: {queue.get_worker_id()}")
-        
-        # Create and subscribe a print subscriber
-        subscriber = PrintSubscriber()
-        subscriber_id = await queue.subscribe(subscriber, check_subscriber_unique=True)
-        print(f"✅ Subscribed PrintSubscriber with ID: {subscriber_id}")
-        print()
-        
-        # Counter for message numbering
-        message_count = 0
-        
-        try:
-            # Publish messages every second
-            while True:
-                message_count += 1
-                current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                
-                # Create and publish a new message
-                message = MyMessage(msg=f"Hello from eventy! Message #{message_count} at {current_time}")
-                event = await queue.publish(message)
-                
-                print(f"📤 Published message #{message_count} (Event ID: {event.id})")
-                
-                # Wait for 1 second before publishing the next message
-                await asyncio.sleep(1)
-                
-        except KeyboardInterrupt:
-            print("\n🛑 Stopping the example...")
+            print(f"✅ Retrieved event queue with worker ID: {queue.get_worker_id()}")
             
-            # Unsubscribe the subscriber
-            success = await queue.unsubscribe(subscriber_id)
-            print(f"✅ Unsubscribed PrintSubscriber: {success}")
+            # Create and subscribe a print subscriber
+            subscriber = PrintSubscriber()
+            subscription = await queue.subscribe(subscriber, check_subscriber_unique=True)
+            print(f"✅ Subscribed PrintSubscriber with ID: {subscription.id}")
+            print()
             
-            # Show final statistics
-            event_count = await queue.count_events()
-            print(f"📊 Total events published: {event_count}")
+            # Counter for message numbering
+            message_count = 0
             
-            # Deregister the message type from the queue manager
-            await queue_manager.deregister(MyMessage)
-            print("✅ Deregistered MyMessage from the queue manager")
-            
-            print("\n👋 Example completed!")
+            try:
+                # Publish messages every second
+                while True:
+                    message_count += 1
+                    current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    
+                    # Create and publish a new message
+                    message = MyMessage(msg=f"Hello from eventy! Message #{message_count} at {current_time}")
+                    event = await queue.publish(message)
+                    
+                    print(f"📤 Published message #{message_count} (Event ID: {event.id})")
+                    
+                    # Wait for 1 second before publishing the next message
+                    await asyncio.sleep(1)
+                    
+            except asyncio.CancelledError:
+                print("\n🛑 Stopping the example...")
+                
+                # Unsubscribe the subscriber
+                success = await queue.unsubscribe(subscription.id)
+                print(f"✅ Unsubscribed PrintSubscriber: {success}")
+                
+                # Show final statistics
+                event_count = await queue.count_events()
+                print(f"📊 Total events published: {event_count}")
+                
+                # Deregister the message type from the queue manager
+                await queue_manager.deregister(MyMessage)
+                print("✅ Deregistered MyMessage from the queue manager")
+                
+                print("\n👋 Example completed!")
 
 
 if __name__ == "__main__":
