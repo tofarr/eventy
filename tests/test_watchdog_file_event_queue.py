@@ -160,21 +160,24 @@ class TestWatchdogFileEventQueue(AbstractEventQueueTestBase):
         )
         
         async with queue:
-            # Check that background tasks are created
-            self.assertTrue(hasattr(queue, '_event_processing_task'))
-            self.assertTrue(hasattr(queue, '_subscription_processing_task'))
+            # Check that background processing task is created
+            self.assertTrue(hasattr(queue, '_processing_task'))
+            self.assertIsNotNone(queue._processing_task)
             
-            # Tasks should be running
-            if queue._event_processing_task:
-                self.assertFalse(queue._event_processing_task.done())
-            if queue._subscription_processing_task:
-                self.assertFalse(queue._subscription_processing_task.done())
+            # Task should be running
+            self.assertFalse(queue._processing_task.done())
+            
+            # Check that observers are running
+            self.assertIsNotNone(queue._observer)
+            self.assertTrue(queue._observer.is_alive())
+            
+            self.assertIsNotNone(queue._subscription_observer)
+            self.assertTrue(queue._subscription_observer.is_alive())
         
-        # After exiting, tasks should be cancelled/done
-        if hasattr(queue, '_event_processing_task') and queue._event_processing_task:
-            self.assertTrue(queue._event_processing_task.done() or queue._event_processing_task.cancelled())
-        if hasattr(queue, '_subscription_processing_task') and queue._subscription_processing_task:
-            self.assertTrue(queue._subscription_processing_task.done() or queue._subscription_processing_task.cancelled())
+        # After exiting, task should be cancelled/done and observers stopped
+        self.assertTrue(queue._processing_task.done() or queue._processing_task.cancelled())
+        self.assertIsNone(queue._observer)
+        self.assertIsNone(queue._subscription_observer)
     
     async def test_watchdog_queue_restart_persistence(self):
         """Test that data persists across queue restarts"""
