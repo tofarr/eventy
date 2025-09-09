@@ -123,7 +123,7 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
         return self._subscriptions[subscriber_id].subscriber
 
     async def search_subscriptions(
-        self, page_id: Optional[str], limit: int = 100
+        self, page_id: Optional[str] = None, limit: int = 100
     ) -> Page[Subscription[T]]:
         """Get all subscribers along with their IDs"""
         self._check_entered()
@@ -177,6 +177,58 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
             )
 
         return event
+
+    async def get_event(self, event_id: int) -> QueueEvent[T]:
+        """Get an event given its id."""
+        self._check_entered()
+
+        if event_id not in self._events:
+            raise EventyError(f"Event {event_id} not found")
+
+        # Deserialize the payload
+        serialized_payload = self._events[event_id]
+        payload = self.serializer.deserialize(serialized_payload)
+        created_at = self._event_metadata[event_id]
+
+        return QueueEvent(id=event_id, payload=payload, created_at=created_at)
+
+    async def search_events(
+        self,
+        page_id: Optional[int] = None,
+        limit: int = 100,
+        created_at__gte: Optional[datetime] = None,
+        created_at__lte: Optional[datetime] = None,
+    ) -> Page[QueueEvent[T]]:
+        """Get existing events with optional paging parameters"""
+        self._check_entered()
+
+        # Filter events based on criteria
+        filtered_events = []
+        for event_id in sorted(self._events.keys()):
+            created_at = self._event_metadata[event_id]
+            
+            if created_at__gte is not None and created_at < created_at__gte:
+                continue
+            if created_at__lte is not None and created_at > created_at__lte:
+                continue
+                
+            # Deserialize the payload
+            serialized_payload = self._events[event_id]
+            payload = self.serializer.deserialize(serialized_payload)
+            event = QueueEvent(id=event_id, payload=payload, created_at=created_at)
+            filtered_events.append(event)
+
+        # Simple pagination
+        start_index = page_id or 0
+        end_index = start_index + limit
+        page_items = filtered_events[start_index:end_index]
+
+        # Calculate next page ID
+        next_page_id = None
+        if end_index < len(filtered_events):
+            next_page_id = end_index
+
+        return Page(items=page_items, next_page_id=next_page_id)
 
     async def get_result(self, result_id: UUID) -> EventResult:
         """Get an event result given its id"""
