@@ -9,13 +9,15 @@ This script:
 4. Publishes a new message with the current time every second
 """
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
+from uuid import UUID, uuid4
 
 from eventy.event_queue import EventQueue
 from eventy.queue_manager import get_default_queue_manager
 from eventy.subscribers.subscriber import Subscriber
 from eventy.queue_event import QueueEvent
+from eventy.subscribers.worker_match_subscriber import WorkerMatchSubscriber
 
 
 @dataclass
@@ -63,10 +65,8 @@ async def main():
             print(f"✅ Retrieved event queue with worker ID: {queue.get_worker_id()}")
 
             # Create and subscribe a print subscriber
-            subscriber = PrintSubscriber()
-            subscription = await queue.subscribe(
-                subscriber, check_subscriber_unique=True
-            )
+            subscriber = WorkerMatchSubscriber(PrintSubscriber(), queue.get_worker_id())
+            subscription = await queue.subscribe(subscriber, 0)
             print(f"✅ Subscribed PrintSubscriber with ID: {subscription.id}")
             print()
 

@@ -16,18 +16,18 @@ _LOGGER = logging.getLogger(__name__)
 class EventFileHandler(FileSystemEventHandler):
     """File system event handler for watchdog"""
 
-    def __init__(self, queue):
+    def __init__(self, queue, loop: asyncio.AbstractEventLoop):
         super().__init__()
         self.queue = queue
         self._pending_events = asyncio.Queue()
+        self.loop = loop
 
     def on_created(self, event):
         """Handle file creation events"""
         if not event.is_directory:
             # Add to pending events queue for async processing
             try:
-                loop = asyncio.get_running_loop()
-                loop.call_soon_threadsafe(
+                self.loop.call_soon_threadsafe(
                     self._pending_events.put_nowait, event.src_path
                 )
             except RuntimeError:
@@ -117,7 +117,7 @@ class WatchdogFileEventQueue(AbstractFileEventQueue[T]):
     async def _start_watchdog(self):
         """Start watchdog file monitoring"""
         # Set up event monitoring
-        self._event_handler = EventFileHandler(self)
+        self._event_handler = EventFileHandler(self, asyncio.get_running_loop())
         self._observer = Observer()
         self._observer.schedule(
             self._event_handler, str(self.events_dir), recursive=False

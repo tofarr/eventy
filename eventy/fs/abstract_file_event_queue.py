@@ -223,7 +223,7 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
     async def subscribe(
         self,
         subscriber: Subscriber[T],
-        check_subscriber_unique: bool = True,
+        check_subscriber_unique: bool = False,
         from_index: int | None = None,
     ) -> Subscription[T]:
         """Add a subscriber to this queue"""
