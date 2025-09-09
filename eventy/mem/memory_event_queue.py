@@ -101,7 +101,7 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
                     )
                     # Process event asynchronously (fire and forget)
                     asyncio.create_task(
-                        subscriber.on_event(event, self.worker_id)
+                        subscriber.on_event(event, self)
                     )
 
         return subscription
@@ -175,7 +175,7 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
         # Notify all subscribers asynchronously
         for subscription in self._subscriptions.values():
             asyncio.create_task(
-                subscription.subscriber.on_event(event, self.worker_id)
+                subscription.subscriber.on_event(event, self)
             )
 
         return event
