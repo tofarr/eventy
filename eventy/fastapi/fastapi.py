@@ -94,9 +94,7 @@ def add_queue_endpoints(
         created_at__lte: datetime | None = None,
     ) -> int:
         event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
-        count = await event_queue.count_events(
-            created_at__gte, created_at__lte
-        )
+        count = await event_queue.count_events(created_at__gte, created_at__lte)
         return count
 
     @fastapi.get("/event/{id}")
@@ -144,7 +142,6 @@ def add_queue_endpoints(
     async def remove_subscriber(id: UUID) -> bool:
         event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
         return event_queue.unsubscribe(id)
-
 
     @fastapi.get("/result/search")
     async def search_results(
