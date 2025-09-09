@@ -3,7 +3,7 @@
 Entry point for running the FastAPI app with eventy queue manager.
 
 Usage:
-    python -m eventy [--host HOST] [--port PORT] [--reload]
+    python -m eventy.fastapi [--host HOST] [--port PORT] [--reload]
 """
 
 import argparse

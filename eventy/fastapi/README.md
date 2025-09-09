@@ -12,17 +12,17 @@ This module provides FastAPI integration for the eventy event queue system.
 
 ### Running the App
 
-The simplest way to run the FastAPI app is using the eventy module directly:
+The simplest way to run the FastAPI app is using the eventy.fastapi module:
 
 ```bash
 # Run with default settings (host: 0.0.0.0, port: 8000)
-python -m eventy
+python -m eventy.fastapi
 
 # Run with custom host and port
-python -m eventy --host localhost --port 8080
+python -m eventy.fastapi --host localhost --port 8080
 
 # Run with auto-reload for development
-python -m eventy --reload
+python -m eventy.fastapi --reload
 ```
 
 ### Using Uvicorn Directly
