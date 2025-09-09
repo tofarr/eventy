@@ -3,7 +3,7 @@ import logging
 from typing import TypeVar, Union
 from uuid import UUID, uuid4
 from eventy.event_queue import EventQueue
-from eventy.event_status import EventStatus
+from eventy.event_result import EventResult
 from eventy.eventy_config import EventyConfig
 from eventy.fastapi.websocket_subscriber import WEBSOCKETS, WebsocketSubscriber
 from eventy.queue_manager import QueueManager
@@ -18,7 +18,7 @@ from fastapi import (
 )
 from pydantic import BaseModel
 
-from eventy.subscriber.subscriber import Subscriber
+from eventy.subscribers.subscriber import Subscriber
 
 
 T = TypeVar("T")
@@ -38,13 +38,12 @@ def add_queue_endpoints(
     config: EventyConfig,
 ):
 
-    class ResponseEvent(BaseModel):
+    class EventResponse(BaseModel):
         id: int
         payload: payload_type  # type: ignore
-        status: EventStatus
         created_at: datetime
 
-    class ResponsePage(BaseModel):
+    class EventPage(BaseModel):
         items: list[payload_type]  # type: ignore
         next_page_id: str | None
 
@@ -65,6 +64,10 @@ def add_queue_endpoints(
         items: list[SubscriptionResponse]  # type: ignore
         next_page_id: str | None
 
+    class ResultPage(BaseModel):
+        items: list[EventResult]
+        next_page_id: str | None
+
     @fastapi.post("/event")
     async def publish(payload: payload_type) -> ResponseEvent:  # type: ignore
         event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
@@ -75,19 +78,29 @@ def add_queue_endpoints(
     async def search_events(
         page_id: str | None = None,
         limit: int = 100,
-        created_at__min: datetime | None = None,
-        created_at__max: datetime | None = None,
-        status__eq: EventStatus | None = None,
-    ) -> ResponsePage:
+        created_at__gte: datetime | None = None,
+        created_at__lte: datetime | None = None,
+    ) -> EventPage:
         assert limit <= 100
         event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
         page = await event_queue.search_events(
-            page_id, limit, created_at__min, created_at__max, status__eq
+            page_id, limit, created_at__gte, created_at__lte
         )
         return page
 
+    @fastapi.get("/event/count")
+    async def count_events(
+        created_at__gte: datetime | None = None,
+        created_at__lte: datetime | None = None,
+    ) -> int:
+        event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
+        count = await event_queue.count_events(
+            created_at__gte, created_at__lte
+        )
+        return count
+
     @fastapi.get("/event/{id}")
-    async def get_event(id: int) -> ResponseEvent:
+    async def get_event(id: int) -> EventResponse:
         event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
         try:
             event = await event_queue.get_event(id)
@@ -96,13 +109,12 @@ def add_queue_endpoints(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
     @fastapi.get("/event")
-    async def get_all_events(event_ids: list[int]) -> list[ResponseEvent | None]:
-        assert len(event_ids) <= 100
+    async def batch_get_events(ids: list[int]) -> list[EventResponse | None]:
+        assert len(ids) <= 100
         event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
-        events = await event_queue.get_all_events(event_ids)
+        events = await event_queue.batch_get_events(ids)
         return events
 
-    # TODO: Add an add_subscriber endpoint...
     @fastapi.get("/subscriber/search")
     async def search_subscriptions(
         page_id: str | None = None, limit: int = 100
@@ -114,13 +126,13 @@ def add_queue_endpoints(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
     @fastapi.post("/subscriber")
-    async def add_subscriber(subscriber: subscriber_type) -> UUID:  # type: ignore
+    async def add_subscriber(subscriber: subscriber_type) -> SubscriptionResponse:  # type: ignore
         event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
         subscription_id = await event_queue.subscribe(subscriber)
         return subscription_id
 
     @fastapi.get("/subscriber/{id}")
-    async def get_subscriber(subscriber: subscriber_type) -> UUID:  # type: ignore
+    async def get_subscriber(id: UUID) -> subscriber_type:  # type: ignore
         event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
         try:
             subscriber = await event_queue.get_subscriber(id)
@@ -132,6 +144,45 @@ def add_queue_endpoints(
     async def remove_subscriber(id: UUID) -> bool:
         event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
         return event_queue.unsubscribe(id)
+
+
+    @fastapi.get("/result/search")
+    async def search_results(
+        page_id: str | None = None,
+        limit: int = 100,
+        event_id__eq: int | None = None,
+        worker_id__eq: UUID | None = None,
+        created_at__gte: datetime | None = None,
+        created_at__lte: datetime | None = None,
+    ) -> ResultPage:
+        event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
+        try:
+            return await event_queue.search_results(
+                page_id=page_id,
+                limit=limit,
+                event_id__eq=event_id__eq,
+                worker_id__eq=worker_id__eq,
+                created_at__gte=created_at__gte,
+                created_at__lte=created_at__lte,
+            )
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+    @fastapi.get("/result/{id}")
+    async def get_result(subscriber: subscriber_type) -> EventResult:  # type: ignore
+        event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
+        try:
+            subscriber = await event_queue.get_subscriber(id)
+            return SubscriptionResponse(id, subscriber)
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+    @fastapi.get("/result")
+    async def batch_get_results(result_ids: list[int]) -> list[EventResult | None]:
+        assert len(result_ids) <= 100
+        event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
+        results = await event_queue.batch_get_results(result_ids)
+        return results
 
     @fastapi.websocket("/socket")
     async def socket(

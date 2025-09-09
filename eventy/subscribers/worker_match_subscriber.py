@@ -1,5 +1,3 @@
-
-
 from dataclasses import dataclass
 from typing import TypeVar
 from uuid import UUID
@@ -7,7 +5,7 @@ from eventy.event_queue import EventQueue
 from eventy.queue_event import QueueEvent
 from eventy.subscribers.subscriber import Subscriber
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 @dataclass
@@ -17,11 +15,9 @@ class WorkerMatchSubscriber(Subscriber[T]):
 
     @property
     def payload_type(self) -> type[T]:
-        return self.subscriber.payload_type    
+        return self.subscriber.payload_type
 
-    async def on_event(
-        self, event: QueueEvent[T], event_queue: EventQueue[T]
-    ) -> None:
+    async def on_event(self, event: QueueEvent[T], event_queue: EventQueue[T]) -> None:
         """Subscriber which makes sure the current worker matches a preset
 
         Args:
