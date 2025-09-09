@@ -56,24 +56,24 @@ def get_default_queue_manager() -> QueueManager:
     if _default_queue_manager is None:
         try:
             # Check environment...
-            manager_class = get_impl(
-                EVENTY_QUEUE_MANAGER, QueueManager
-            )
+            manager_class = get_impl(EVENTY_QUEUE_MANAGER, QueueManager)
             _default_queue_manager = manager_class()
         except ValueError:
             root_dir = os.getenv(EVENTY_ROOT_DIR)
-            #if root_dir:
-            #    from eventy.fs.filesystem_queue_manager import FilesystemQueueManager
-            #    _default_queue_manager = FilesystemQueueManager(root_dir=root_dir)
-            #else:
-            from eventy.mem.memory_queue_manager import MemoryQueueManager
-            _default_queue_manager = MemoryQueueManager()
+            if root_dir:
+                from eventy.fs.file_event_queue_manager import FileEventQueueManager
+
+                _default_queue_manager = FileEventQueueManager(root_dir=root_dir)
+            else:
+                from eventy.mem.memory_queue_manager import MemoryQueueManager
+
+                _default_queue_manager = MemoryQueueManager()
 
         try:
             config = get_config()
             for payload_type in config.get_payload_types():
                 _default_queue_manager.register(payload_type)
         except ValueError:
-            _LOGGER.info('no_initial_payload_types')
+            _LOGGER.info("no_initial_payload_types")
 
     return _default_queue_manager

@@ -1,12 +1,10 @@
-
-
 from dataclasses import dataclass
 from typing import Generic, TypeVar
 from eventy.event_queue import EventQueue
 from eventy.queue_event import QueueEvent
 from eventy.subscribers.subscriber import Subscriber
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 @dataclass

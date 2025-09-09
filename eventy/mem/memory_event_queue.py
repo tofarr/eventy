@@ -61,7 +61,7 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
     def get_worker_id(self) -> UUID:
         """Get the id of the current worker"""
         return self.worker_id
-    
+
     def get_payload_type(self) -> type[T]:
         """Get the type of payload handled by this queue"""
         return self.payload_type
@@ -98,9 +98,7 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
                         created_at=self._event_metadata[event_id],
                     )
                     # Process event asynchronously (fire and forget)
-                    asyncio.create_task(
-                        subscriber.on_event(event, self)
-                    )
+                    asyncio.create_task(subscriber.on_event(event, self))
 
         return subscription
 
@@ -172,9 +170,7 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
 
         # Notify all subscribers asynchronously
         for subscription in self._subscriptions.values():
-            asyncio.create_task(
-                subscription.subscriber.on_event(event, self)
-            )
+            asyncio.create_task(subscription.subscriber.on_event(event, self))
 
         return event
 
@@ -206,12 +202,12 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
         filtered_events = []
         for event_id in sorted(self._events.keys()):
             created_at = self._event_metadata[event_id]
-            
+
             if created_at__gte is not None and created_at < created_at__gte:
                 continue
             if created_at__lte is not None and created_at > created_at__lte:
                 continue
-                
+
             # Deserialize the payload
             serialized_payload = self._events[event_id]
             payload = self.serializer.deserialize(serialized_payload)
@@ -312,10 +308,10 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
     async def create_claim(self, claim_id: str, data: str | None = None) -> bool:
         """Create a claim with the given ID."""
         self._check_entered()
-        
+
         if claim_id in self._claims:
             return False
-        
+
         claim = Claim(id=claim_id, worker_id=self.worker_id, data=data)
         self._claims[claim_id] = claim
         return True
@@ -323,10 +319,10 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
     async def get_claim(self, claim_id: str) -> Claim:
         """Get a claim by its ID."""
         self._check_entered()
-        
+
         if claim_id not in self._claims:
             raise EventyError(f"Claim {claim_id} not found")
-        
+
         return self._claims[claim_id]
 
     async def search_claims(
@@ -339,7 +335,7 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
     ) -> Page[Claim]:
         """Search for claims with optional filtering and pagination."""
         self._check_entered()
-        
+
         # Filter claims based on criteria
         filtered_claims = []
         for claim in self._claims.values():
@@ -380,7 +376,7 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
     ) -> int:
         """Count claims matching the given criteria."""
         self._check_entered()
-        
+
         count = 0
         for claim in self._claims.values():
             if worker_id__eq is not None and claim.worker_id != worker_id__eq:

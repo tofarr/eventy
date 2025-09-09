@@ -141,3 +141,5 @@ cython_debug/
 *.DS_Storage
 
 .DS_Store
+
+tmp/

@@ -16,15 +16,15 @@ _LOGGER = logging.getLogger(__name__)
 
 class EventQueue(Generic[T], ABC):
     """Event queue for distributed processin. Within the context of an event queue
-       results are only ever added - never updated or deleted """
+    results are only ever added - never updated or deleted"""
 
     @abstractmethod
     async def __aenter__(self):
-        """ Start this event queue"""
+        """Start this event queue"""
 
     @abstractmethod
     async def __aexit__(self, exc_type, exc_value, traceback):
-        """ Close this event queue """
+        """Close this event queue"""
 
     @abstractmethod
     def get_worker_id(self) -> UUID:
@@ -33,14 +33,17 @@ class EventQueue(Generic[T], ABC):
         from any others which may be subscribed - whether in the current process or anywhere outside it.
         """
 
-
-
     @abstractmethod
     def get_payload_type(self) -> type[T]:
-        """ Get the type of payload handled by this queue """
+        """Get the type of payload handled by this queue"""
 
     @abstractmethod
-    async def subscribe(self, subscriber: Subscriber[T], check_subscriber_unique: bool = True, from_index: int | None = None) -> Subscription[T]:
+    async def subscribe(
+        self,
+        subscriber: Subscriber[T],
+        check_subscriber_unique: bool = True,
+        from_index: int | None = None,
+    ) -> Subscription[T]:
         """
         Add a subscriber to this queue
 
@@ -111,7 +114,9 @@ class EventQueue(Generic[T], ABC):
     async def get_event(self, event_id: int) -> QueueEvent[T]:
         """Get an event given its id."""
 
-    async def batch_get_events(self, event_ids: list[int]) -> list[QueueEvent[T] | None]:
+    async def batch_get_events(
+        self, event_ids: list[int]
+    ) -> list[QueueEvent[T] | None]:
         events = []
         for event_id in event_ids:
             try:
@@ -131,8 +136,7 @@ class EventQueue(Generic[T], ABC):
         created_at__gte: Optional[datetime] = None,
         created_at__lte: Optional[datetime] = None,
     ) -> Page[QueueEvent[T]]:
-        """Get existing results with optional paging parameters
-        """
+        """Get existing results with optional paging parameters"""
 
     async def count_events(
         self,
@@ -157,7 +161,9 @@ class EventQueue(Generic[T], ABC):
     async def get_result(self, result_id: UUID) -> EventResult:
         """Get an event given its id."""
 
-    async def batch_get_results(self, result_ids: list[UUID]) -> list[EventResult | None]:
+    async def batch_get_results(
+        self, result_ids: list[UUID]
+    ) -> list[EventResult | None]:
         results = []
         for result_id in result_ids:
             try:
@@ -179,8 +185,7 @@ class EventQueue(Generic[T], ABC):
         created_at__gte: Optional[datetime] = None,
         created_at__lte: Optional[datetime] = None,
     ) -> Page[EventResult]:
-        """Get existing results with optional paging parameters
-        """
+        """Get existing results with optional paging parameters"""
 
     async def count_results(
         self,
@@ -208,11 +213,11 @@ class EventQueue(Generic[T], ABC):
     @abstractmethod
     async def create_claim(self, claim_id: str, data: str | None = None) -> bool:
         """Create a claim with the given ID.
-        
+
         Args:
             claim_id: The string ID for the claim
             data: Optional string data to store with the claim (e.g., worker info)
-            
+
         Returns:
             bool: True if the claim was created successfully, False if it already exists
         """
@@ -220,23 +225,23 @@ class EventQueue(Generic[T], ABC):
     @abstractmethod
     async def get_claim(self, claim_id: str) -> Claim:
         """Get a claim by its ID.
-        
+
         Args:
             claim_id: The string ID of the claim
-            
+
         Returns:
             Claim: The claim object
-            
+
         Raises:
             EventyError: If the claim is not found
         """
 
     async def batch_get_claims(self, claim_ids: list[str]) -> list[Claim | None]:
         """Get multiple claims by their IDs.
-        
+
         Args:
             claim_ids: List of claim IDs to retrieve
-            
+
         Returns:
             list[Claim | None]: List of claims, None for claims that don't exist
         """
@@ -260,14 +265,14 @@ class EventQueue(Generic[T], ABC):
         created_at__lte: Optional[datetime] = None,
     ) -> Page[Claim]:
         """Search for claims with optional filtering and pagination.
-        
+
         Args:
             page_id: Optional page ID for pagination
             limit: Maximum number of claims to return
             worker_id__eq: Filter by worker ID
             created_at__gte: Filter by minimum creation time
             created_at__lte: Filter by maximum creation time
-            
+
         Returns:
             Page[Claim]: Paginated results
         """
@@ -279,12 +284,12 @@ class EventQueue(Generic[T], ABC):
         created_at__lte: Optional[datetime] = None,
     ) -> int:
         """Count claims matching the given criteria.
-        
+
         Args:
             worker_id__eq: Filter by worker ID
             created_at__gte: Filter by minimum creation time
             created_at__lte: Filter by maximum creation time
-            
+
         Returns:
             int: Number of matching claims
         """

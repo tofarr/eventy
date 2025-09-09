@@ -24,12 +24,14 @@ class WebsocketSubscriber(Subscriber[T]):
         default_factory=get_default_serializer
     )
 
-    async def on_event(self, event: QueueEvent[T], event_queue: "EventQueue[T]") -> None:
+    async def on_event(
+        self, event: QueueEvent[T], event_queue: "EventQueue[T]"
+    ) -> None:
         """Send event to websocket if connected and matches worker ID"""
         # Only send to websocket if it matches the current worker
         if event_queue.worker_id != self.websocket_id:
             return
-            
+
         websocket = WEBSOCKETS.get(self.websocket_id)
         if not websocket:
             return

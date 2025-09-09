@@ -11,7 +11,7 @@ Set this to a fully qualified class name to use a custom QueueManager implementa
 Default: eventy.mem.memory_queue_manager.MemoryQueueManager
 """
 
-# Serializer Configuration  
+# Serializer Configuration
 EVENTY_SERIALIZER = "EVENTY_SERIALIZER"
 """Environment variable to override the default serializer implementation.
 Set this to a fully qualified class name to use a custom Serializer implementation.

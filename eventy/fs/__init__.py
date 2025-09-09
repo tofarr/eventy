@@ -7,7 +7,7 @@ from .file_event_queue_manager import FileEventQueueManager
 
 __all__ = [
     "AbstractFileEventQueue",
-    "PollingFileEventQueue", 
+    "PollingFileEventQueue",
     "WatchdogFileEventQueue",
     "FileEventQueueManager",
 ]

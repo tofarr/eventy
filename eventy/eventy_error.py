@@ -1,3 +1,2 @@
-
 class EventyError(Exception):
     pass
