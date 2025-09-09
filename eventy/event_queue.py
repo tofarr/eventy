@@ -3,6 +3,7 @@ from datetime import datetime
 import logging
 from typing import Callable, Generic, TypeVar, Optional, AsyncIterator
 from uuid import UUID
+from eventy.claim import Claim
 from eventy.event_result import EventResult
 from eventy.page import Page
 from eventy.queue_event import QueueEvent
@@ -137,3 +138,87 @@ class EventQueue(Generic[T], ABC):
         created_at__lte: Optional[datetime] = None,
     ) -> int:
         """Get the number of events matching the criteria given"""
+
+    @abstractmethod
+    async def create_claim(self, claim_id: str) -> bool:
+        """Create a claim with the given ID.
+        
+        Args:
+            claim_id: The string ID for the claim
+            
+        Returns:
+            bool: True if the claim was created successfully, False if it already exists
+        """
+
+    @abstractmethod
+    async def get_claim(self, claim_id: str) -> Claim:
+        """Get a claim by its ID.
+        
+        Args:
+            claim_id: The string ID of the claim
+            
+        Returns:
+            Claim: The claim object
+            
+        Raises:
+            EventyError: If the claim is not found
+        """
+
+    async def batch_get_claims(self, claim_ids: list[str]) -> list[Claim | None]:
+        """Get multiple claims by their IDs.
+        
+        Args:
+            claim_ids: List of claim IDs to retrieve
+            
+        Returns:
+            list[Claim | None]: List of claims, None for claims that don't exist
+        """
+        claims = []
+        for claim_id in claim_ids:
+            try:
+                claim = await self.get_claim(claim_id)
+                claims.append(claim)
+            except Exception:
+                _LOGGER.warning("error_getting_claim", exc_info=True, stack_info=True)
+                claims.append(None)
+        return claims
+
+    @abstractmethod
+    async def search_claims(
+        self,
+        page_id: Optional[str] = None,
+        limit: int = 100,
+        worker_id__eq: Optional[UUID] = None,
+        created_at__gte: Optional[datetime] = None,
+        created_at__lte: Optional[datetime] = None,
+    ) -> Page[Claim]:
+        """Search for claims with optional filtering and pagination.
+        
+        Args:
+            page_id: Optional page ID for pagination
+            limit: Maximum number of claims to return
+            worker_id__eq: Filter by worker ID
+            created_at__gte: Filter by minimum creation time
+            created_at__lte: Filter by maximum creation time
+            
+        Returns:
+            Page[Claim]: Paginated results
+        """
+
+    @abstractmethod
+    async def count_claims(
+        self,
+        worker_id__eq: Optional[UUID] = None,
+        created_at__gte: Optional[datetime] = None,
+        created_at__lte: Optional[datetime] = None,
+    ) -> int:
+        """Count claims matching the given criteria.
+        
+        Args:
+            worker_id__eq: Filter by worker ID
+            created_at__gte: Filter by minimum creation time
+            created_at__lte: Filter by maximum creation time
+            
+        Returns:
+            int: Number of matching claims
+        """

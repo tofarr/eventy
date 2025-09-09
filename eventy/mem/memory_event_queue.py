@@ -4,6 +4,7 @@ from typing import Generic, TypeVar, Optional, Dict, List
 from uuid import UUID, uuid4
 import asyncio
 
+from eventy.claim import Claim
 from eventy.event_queue import EventQueue
 from eventy.event_result import EventResult
 from eventy.eventy_error import EventyError
@@ -31,6 +32,7 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
     _subscriptions: Dict[UUID, Subscription[T]] = field(
         default_factory=dict, init=False
     )
+    _claims: Dict[str, Claim] = field(default_factory=dict, init=False)
     _next_event_id: int = field(default=1, init=False)
     _entered: bool = field(default=False, init=False)
 
@@ -54,6 +56,7 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
         self._event_metadata.clear()
         self._results.clear()
         self._subscriptions.clear()
+        self._claims.clear()
 
     def get_worker_id(self) -> UUID:
         """Get the id of the current worker"""
@@ -255,3 +258,87 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
         """Add a result to the queue (internal method)"""
         self._check_entered()
         self._results[result.id] = result
+
+    async def create_claim(self, claim_id: str) -> bool:
+        """Create a claim with the given ID."""
+        self._check_entered()
+        
+        if claim_id in self._claims:
+            return False
+        
+        claim = Claim(id=claim_id, worker_id=self.worker_id)
+        self._claims[claim_id] = claim
+        return True
+
+    async def get_claim(self, claim_id: str) -> Claim:
+        """Get a claim by its ID."""
+        self._check_entered()
+        
+        if claim_id not in self._claims:
+            raise EventyError(f"Claim {claim_id} not found")
+        
+        return self._claims[claim_id]
+
+    async def search_claims(
+        self,
+        page_id: Optional[str] = None,
+        limit: int = 100,
+        worker_id__eq: Optional[UUID] = None,
+        created_at__gte: Optional[datetime] = None,
+        created_at__lte: Optional[datetime] = None,
+    ) -> Page[Claim]:
+        """Search for claims with optional filtering and pagination."""
+        self._check_entered()
+        
+        # Filter claims based on criteria
+        filtered_claims = []
+        for claim in self._claims.values():
+            if worker_id__eq is not None and claim.worker_id != worker_id__eq:
+                continue
+            if created_at__gte is not None and claim.created_at < created_at__gte:
+                continue
+            if created_at__lte is not None and claim.created_at > created_at__lte:
+                continue
+            filtered_claims.append(claim)
+
+        # Sort by created_at for consistent ordering
+        filtered_claims.sort(key=lambda c: c.created_at)
+
+        # Simple pagination
+        start_index = 0
+        if page_id:
+            try:
+                start_index = int(page_id)
+            except ValueError:
+                start_index = 0
+
+        end_index = start_index + limit
+        page_items = filtered_claims[start_index:end_index]
+
+        # Calculate next page ID
+        next_page_id = None
+        if end_index < len(filtered_claims):
+            next_page_id = str(end_index)
+
+        return Page(items=page_items, next_page_id=next_page_id)
+
+    async def count_claims(
+        self,
+        worker_id__eq: Optional[UUID] = None,
+        created_at__gte: Optional[datetime] = None,
+        created_at__lte: Optional[datetime] = None,
+    ) -> int:
+        """Count claims matching the given criteria."""
+        self._check_entered()
+        
+        count = 0
+        for claim in self._claims.values():
+            if worker_id__eq is not None and claim.worker_id != worker_id__eq:
+                continue
+            if created_at__gte is not None and claim.created_at < created_at__gte:
+                continue
+            if created_at__lte is not None and claim.created_at > created_at__lte:
+                continue
+            count += 1
+
+        return count

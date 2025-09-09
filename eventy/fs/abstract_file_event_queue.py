@@ -7,9 +7,10 @@ from pathlib import Path
 from typing import TypeVar, Optional, AsyncIterator
 from uuid import UUID, uuid4
 
+from eventy.claim import Claim
 from eventy.event_queue import EventQueue
 from eventy.event_result import EventResult
-
+from eventy.eventy_error import EventyError
 from eventy.page import Page
 from eventy.queue_event import QueueEvent
 from eventy.serializers.serializer import Serializer, get_default_serializer
@@ -41,6 +42,7 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
     event_serializer: Serializer[QueueEvent[T]] = field(default_factory=get_default_serializer)
     result_serializer: Serializer[EventResult] = field(default_factory=get_default_serializer)
     subscriber_serializer: Serializer[Subscriber[T]] = field(default_factory=get_default_serializer)
+    claim_serializer: Serializer[Claim] = field(default_factory=get_default_serializer)
     
     # Running state
     running: bool = field(default=False, init=False)
@@ -67,10 +69,12 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
         self.events_dir = self.root_dir / "events"
         self.results_dir = self.root_dir / "results" 
         self.subscriptions_dir = self.root_dir / "subscriptions"
+        self.claims_dir = self.root_dir / "claims"
         
         self.events_dir.mkdir(exist_ok=True)
         self.results_dir.mkdir(exist_ok=True)
         self.subscriptions_dir.mkdir(exist_ok=True)
+        self.claims_dir.mkdir(exist_ok=True)
         
         # Initialize next event ID by checking existing events
         self._initialize_event_counter()
@@ -403,6 +407,113 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
         
         if subscriber_count > 0:
             _LOGGER.info(f"Notified {subscriber_count} subscribers about event {event.id}")
+
+    async def create_claim(self, claim_id: str) -> bool:
+        """Create a claim with the given ID."""
+        self._check_running()
+        
+        claim_file = self.claims_dir / claim_id
+        if claim_file.exists():
+            return False
+        
+        claim = Claim(id=claim_id, worker_id=self.worker_id)
+        claim_data = self.claim_serializer.serialize(claim)
+        
+        try:
+            with open(claim_file, 'xb') as f:
+                f.write(claim_data)
+            _LOGGER.info(f"Created claim {claim_id} at {claim_file}")
+            return True
+        except FileExistsError:
+            return False
+
+    async def get_claim(self, claim_id: str) -> Claim:
+        """Get a claim by its ID."""
+        self._check_running()
+        
+        claim_file = self.claims_dir / claim_id
+        if not claim_file.exists():
+            raise EventyError(f"Claim {claim_id} not found")
+        
+        with open(claim_file, 'rb') as f:
+            claim_data = f.read()
+        
+        return self.claim_serializer.deserialize(claim_data)
+
+    async def _iter_claims(self,
+                          worker_id__eq: Optional[UUID] = None,
+                          created_at__gte: Optional[datetime] = None,
+                          created_at__lte: Optional[datetime] = None) -> AsyncIterator[Claim]:
+        """Iterate over claims matching the given criteria"""
+        if not self.claims_dir.exists():
+            return
+        
+        for claim_file in self.claims_dir.iterdir():
+            try:
+                claim = await self.get_claim(claim_file.name)
+                
+                # Apply filters
+                if worker_id__eq is not None and claim.worker_id != worker_id__eq:
+                    continue
+                if created_at__gte is not None and claim.created_at < created_at__gte:
+                    continue
+                if created_at__lte is not None and claim.created_at > created_at__lte:
+                    continue
+                
+                yield claim
+            except (ValueError, OSError) as e:
+                _LOGGER.warning(f"Failed to load claim {claim_file}: {e}")
+
+    async def search_claims(
+        self,
+        page_id: Optional[str] = None,
+        limit: int = 100,
+        worker_id__eq: Optional[UUID] = None,
+        created_at__gte: Optional[datetime] = None,
+        created_at__lte: Optional[datetime] = None,
+    ) -> Page[Claim]:
+        """Search for claims with optional filtering and pagination."""
+        self._check_running()
+        
+        # Collect all matching claims
+        all_claims = []
+        async for claim in self._iter_claims(worker_id__eq, created_at__gte, created_at__lte):
+            all_claims.append(claim)
+        
+        # Sort by created_at for consistent pagination
+        all_claims.sort(key=lambda c: c.created_at)
+        
+        # Handle pagination
+        start_index = 0
+        if page_id:
+            try:
+                start_index = int(page_id)
+            except (ValueError, TypeError):
+                start_index = 0
+        
+        end_index = start_index + limit
+        page_claims = all_claims[start_index:end_index]
+        
+        # Determine next page ID
+        next_page_id = None
+        if end_index < len(all_claims):
+            next_page_id = str(end_index)
+        
+        return Page(items=page_claims, next_page_id=next_page_id)
+
+    async def count_claims(
+        self,
+        worker_id__eq: Optional[UUID] = None,
+        created_at__gte: Optional[datetime] = None,
+        created_at__lte: Optional[datetime] = None,
+    ) -> int:
+        """Count claims matching the given criteria."""
+        self._check_running()
+        
+        count = 0
+        async for _ in self._iter_claims(worker_id__eq, created_at__gte, created_at__lte):
+            count += 1
+        return count
     
     
     # Abstract methods that must be implemented by concrete subclasses
