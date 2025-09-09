@@ -61,7 +61,7 @@ class TestMemoryEventQueue(AbstractEventQueueTestBase):
             await queue.publish("test")
     
     async def test_memory_queue_multiple_enter_exit(self):
-        """Test that MemoryEventQueue can be entered and exited multiple times"""
+        """Test that MemoryEventQueue can be entered and exited multiple times and resets content"""
         queue = MemoryEventQueue(payload_type=str)
         
         # First usage
@@ -70,14 +70,14 @@ class TestMemoryEventQueue(AbstractEventQueueTestBase):
             events = await queue.search_events()
             self.assertEqual(len(events.items), 1)
         
-        # Second usage - should maintain state
+        # Second usage - content should be reset after exit
         async with queue:
             events = await queue.search_events()
-            self.assertEqual(len(events.items), 1)  # Should still have the event
+            self.assertEqual(len(events.items), 0)  # Should be empty after reset
             
             await queue.publish("event2")
             events = await queue.search_events()
-            self.assertEqual(len(events.items), 2)
+            self.assertEqual(len(events.items), 1)  # Only the new event
 
 
 if __name__ == '__main__':
