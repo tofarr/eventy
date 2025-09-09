@@ -259,14 +259,14 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
         self._check_entered()
         self._results[result.id] = result
 
-    async def create_claim(self, claim_id: str) -> bool:
+    async def create_claim(self, claim_id: str, data: str | None = None) -> bool:
         """Create a claim with the given ID."""
         self._check_entered()
         
         if claim_id in self._claims:
             return False
         
-        claim = Claim(id=claim_id, worker_id=self.worker_id)
+        claim = Claim(id=claim_id, worker_id=self.worker_id, data=data)
         self._claims[claim_id] = claim
         return True
 

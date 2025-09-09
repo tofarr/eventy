@@ -408,7 +408,7 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
         if subscriber_count > 0:
             _LOGGER.info(f"Notified {subscriber_count} subscribers about event {event.id}")
 
-    async def create_claim(self, claim_id: str) -> bool:
+    async def create_claim(self, claim_id: str, data: str | None = None) -> bool:
         """Create a claim with the given ID."""
         self._check_running()
         
@@ -416,7 +416,7 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
         if claim_file.exists():
             return False
         
-        claim = Claim(id=claim_id, worker_id=self.worker_id)
+        claim = Claim(id=claim_id, worker_id=self.worker_id, data=data)
         claim_data = self.claim_serializer.serialize(claim)
         
         try:

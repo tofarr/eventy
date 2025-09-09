@@ -140,11 +140,12 @@ class EventQueue(Generic[T], ABC):
         """Get the number of events matching the criteria given"""
 
     @abstractmethod
-    async def create_claim(self, claim_id: str) -> bool:
+    async def create_claim(self, claim_id: str, data: str | None = None) -> bool:
         """Create a claim with the given ID.
         
         Args:
             claim_id: The string ID for the claim
+            data: Optional string data to store with the claim (e.g., worker info)
             
         Returns:
             bool: True if the claim was created successfully, False if it already exists

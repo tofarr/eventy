@@ -10,3 +10,4 @@ class Claim:
     id: str
     worker_id: UUID
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    data: str | None = None
