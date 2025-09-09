@@ -138,6 +138,80 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
         _LOGGER.info(f"Published event {event_id} to {event_file}")
         return event
     
+    async def get_event(self, event_id: int) -> QueueEvent[T]:
+        """Get an event given its id."""
+        self._check_running()
+        
+        event_file = self.events_dir / str(event_id)
+        if not event_file.exists():
+            raise EventyError(f"Event {event_id} not found")
+        
+        with open(event_file, 'rb') as f:
+            event_data = f.read()
+        
+        return self.event_serializer.deserialize(event_data)
+    
+    async def _iter_events(self,
+                          created_at__gte: Optional[datetime] = None,
+                          created_at__lte: Optional[datetime] = None) -> AsyncIterator[QueueEvent[T]]:
+        """Iterate over events matching the given criteria"""
+        if not self.events_dir.exists():
+            return
+        
+        # Get all event files and sort by event ID
+        event_files = []
+        for event_file in self.events_dir.iterdir():
+            try:
+                event_id = int(event_file.name)
+                event_files.append((event_id, event_file))
+            except ValueError:
+                # Skip files that aren't numeric
+                continue
+        
+        # Sort by event ID for consistent ordering
+        event_files.sort(key=lambda x: x[0])
+        
+        for event_id, event_file in event_files:
+            try:
+                event = await self.get_event(event_id)
+                
+                # Apply date filters
+                if created_at__gte is not None and event.created_at < created_at__gte:
+                    continue
+                if created_at__lte is not None and event.created_at > created_at__lte:
+                    continue
+                
+                yield event
+            except (ValueError, OSError) as e:
+                _LOGGER.warning(f"Failed to load event {event_file}: {e}")
+    
+    async def search_events(
+        self,
+        page_id: Optional[int] = None,
+        limit: int = 100,
+        created_at__gte: Optional[datetime] = None,
+        created_at__lte: Optional[datetime] = None,
+    ) -> Page[QueueEvent[T]]:
+        """Get existing events with optional paging parameters"""
+        self._check_running()
+        
+        # Collect all matching events
+        all_events = []
+        async for event in self._iter_events(created_at__gte, created_at__lte):
+            all_events.append(event)
+        
+        # Handle pagination
+        start_index = page_id if page_id is not None else 0
+        end_index = start_index + limit
+        page_events = all_events[start_index:end_index]
+        
+        # Determine next page ID
+        next_page_id = None
+        if end_index < len(all_events):
+            next_page_id = end_index
+        
+        return Page(items=page_events, next_page_id=next_page_id)
+    
     async def subscribe(self, subscriber: Subscriber[T], check_subscriber_unique: bool = True, from_index: int | None = None) -> Subscription[T]:
         """Add a subscriber to this queue"""
         self._check_running()
@@ -216,7 +290,7 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
             except (ValueError, OSError) as e:
                 _LOGGER.warning(f"Failed to load subscription {subscriber_file}: {e}")
     
-    async def search_subscriptions(self, page_id: Optional[str], limit: int = 100) -> Page[Subscription[T]]:
+    async def search_subscriptions(self, page_id: Optional[str] = None, limit: int = 100) -> Page[Subscription[T]]:
         """Get all subscribers along with their IDs"""
         self._check_running()
         
@@ -338,8 +412,7 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
     
     def _mark_event_processed(self, event_id: int):
         """Mark an event as processed to avoid duplicate processing"""
-        if event_id > self.processed_event_id:
-            self.processed_event_id = event_id
+        self.processed_event_id = max(self.processed_event_id, event_id)
     
     def _is_event_processed(self, event_id: int) -> bool:
         """Check if an event has already been processed"""
