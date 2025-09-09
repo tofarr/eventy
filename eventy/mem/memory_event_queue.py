@@ -11,7 +11,7 @@ from eventy.eventy_error import EventyError
 from eventy.page import Page
 from eventy.queue_event import QueueEvent
 from eventy.serializers.serializer import Serializer, get_default_serializer
-from eventy.subscriber import Subscriber
+from eventy.subscribers.subscriber import Subscriber
 from eventy.subscription import Subscription
 
 T = TypeVar("T")
@@ -62,8 +62,6 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
         """Get the id of the current worker"""
         return self.worker_id
     
-
-
     def get_payload_type(self) -> type[T]:
         """Get the type of payload handled by this queue"""
         return self.payload_type

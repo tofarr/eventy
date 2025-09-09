@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Generic, TypeVar
 from uuid import UUID
 
-from eventy.subscriber import Subscriber
+from eventy.subscribers.subscriber import Subscriber
 
 T = TypeVar("T")
 

@@ -1,13 +1,13 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
 import logging
-from typing import Callable, Generic, TypeVar, Optional, AsyncIterator
+from typing import Generic, TypeVar, Optional
 from uuid import UUID
 from eventy.claim import Claim
 from eventy.event_result import EventResult
 from eventy.page import Page
 from eventy.queue_event import QueueEvent
-from eventy.subscriber import Subscriber
+from eventy.subscribers.subscriber import Subscriber
 from eventy.subscription import Subscription
 
 T = TypeVar("T")
@@ -84,7 +84,7 @@ class EventQueue(Generic[T], ABC):
 
     @abstractmethod
     async def search_subscriptions(
-        self, page_id: Optional[str], limit: int = 100
+        self, page_id: Optional[str] = None, limit: int = 100
     ) -> Page[Subscription[T]]:
         """Get all subscribers along with their IDs
 
@@ -93,12 +93,65 @@ class EventQueue(Generic[T], ABC):
         """
 
     async def count_subscriptions(self) -> int:
-        count = sum(1 for subscription in self.iter_subscriptions())
+        count = 0
+        page_id = None
+        while True:
+            page = await self.search_subscriptions(page_id)
+            count += len(page.items)
+            page_id = page.next_page_id
+            if page_id is None:
+                break
         return count
 
     @abstractmethod
     async def publish(self, payload: T) -> QueueEvent[T]:
         """Publish an event to this queue"""
+
+    @abstractmethod
+    async def get_event(self, event_id: int) -> QueueEvent[T]:
+        """Get an event given its id."""
+
+    async def batch_get_events(self, event_ids: list[int]) -> list[QueueEvent[T] | None]:
+        events = []
+        for event_id in event_ids:
+            try:
+                event = await self.get_event(event_id)
+                events.append(event)
+            except Exception:
+                _LOGGER.warning("error_getting_event", exc_info=True, stack_info=True)
+                events.append(None)
+
+        return events
+
+    @abstractmethod
+    async def search_events(
+        self,
+        page_id: Optional[int] = None,
+        limit: int = 100,
+        created_at__gte: Optional[datetime] = None,
+        created_at__lte: Optional[datetime] = None,
+    ) -> Page[QueueEvent[T]]:
+        """Get existing results with optional paging parameters
+        """
+
+    async def count_events(
+        self,
+        created_at__gte: Optional[datetime] = None,
+        created_at__lte: Optional[datetime] = None,
+    ) -> int:
+        count = 0
+        page_id = None
+        while True:
+            page = await self.search_events(
+                page_id=page_id,
+                created_at__gte=created_at__gte,
+                created_at__lte=created_at__lte,
+            )
+            count += len(page.items)
+            page_id = page.next_page_id
+            if page_id is None:
+                break
+        return count
 
     @abstractmethod
     async def get_result(self, result_id: UUID) -> EventResult:
@@ -129,7 +182,6 @@ class EventQueue(Generic[T], ABC):
         """Get existing results with optional paging parameters
         """
 
-    @abstractmethod
     async def count_results(
         self,
         event_id__eq: Optional[int] = None,
@@ -137,7 +189,21 @@ class EventQueue(Generic[T], ABC):
         created_at__gte: Optional[datetime] = None,
         created_at__lte: Optional[datetime] = None,
     ) -> int:
-        """Get the number of events matching the criteria given"""
+        count = 0
+        page_id = None
+        while True:
+            page = await self.search_results(
+                page_id=page_id,
+                event_id__eq=event_id__eq,
+                worker_id__eq=worker_id__eq,
+                created_at__gte=created_at__gte,
+                created_at__lte=created_at__lte,
+            )
+            count += len(page.items)
+            page_id = page.next_page_id
+            if page_id is None:
+                break
+        return count
 
     @abstractmethod
     async def create_claim(self, claim_id: str, data: str | None = None) -> bool:
@@ -206,7 +272,6 @@ class EventQueue(Generic[T], ABC):
             Page[Claim]: Paginated results
         """
 
-    @abstractmethod
     async def count_claims(
         self,
         worker_id__eq: Optional[UUID] = None,
@@ -223,3 +288,17 @@ class EventQueue(Generic[T], ABC):
         Returns:
             int: Number of matching claims
         """
+        count = 0
+        page_id = None
+        while True:
+            page = await self.search_results(
+                page_id=page_id,
+                worker_id__eq=worker_id__eq,
+                created_at__gte=created_at__gte,
+                created_at__lte=created_at__lte,
+            )
+            count += len(page.items)
+            page_id = page.next_page_id
+            if page_id is None:
+                break
+        return count

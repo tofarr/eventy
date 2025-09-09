@@ -4,7 +4,7 @@ from typing import TypeVar, TYPE_CHECKING
 from uuid import UUID
 from eventy.queue_event import QueueEvent
 from eventy.serializers.serializer import Serializer, get_default_serializer
-from eventy.subscriber import Subscriber
+from eventy.subscribers.subscriber import Subscriber
 
 if TYPE_CHECKING:
     from eventy.event_queue import EventQueue

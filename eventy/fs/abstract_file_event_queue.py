@@ -14,7 +14,7 @@ from eventy.eventy_error import EventyError
 from eventy.page import Page
 from eventy.queue_event import QueueEvent
 from eventy.serializers.serializer import Serializer, get_default_serializer
-from eventy.subscriber import Subscriber
+from eventy.subscribers.subscriber import Subscriber
 from eventy.subscription import Subscription
 
 T = TypeVar("T")
