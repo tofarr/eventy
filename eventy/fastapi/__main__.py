@@ -10,7 +10,7 @@ import argparse
 import uvicorn
 
 
-def main():
+def main(app_name: str = "eventy.fastapi.app:app"):
     parser = argparse.ArgumentParser(description="Run the Eventy FastAPI app")
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind to (default: 0.0.0.0)")
     parser.add_argument("--port", type=int, default=8000, help="Port to bind to (default: 8000)")
@@ -24,7 +24,7 @@ def main():
     print()
     
     uvicorn.run(
-        "eventy.fastapi.app:app",
+        app_name,
         host=args.host,
         port=args.port,
         reload=args.reload

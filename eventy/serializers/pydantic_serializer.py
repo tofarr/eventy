@@ -12,6 +12,7 @@ T = TypeVar('T')
 @dataclass
 class PydanticSerializer(Serializer[T]):
     type_adapter: TypeAdapter[T]
+    is_json: bool = True
     
     def serialize(self, obj: T) -> bytes:
         result = self.type_adapter.dump_json(obj)
