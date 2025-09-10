@@ -1,6 +1,8 @@
 from typing import Literal
 from pydantic import BaseModel
 import os
+import random
+import sys
 
 from eventy.config.default_eventy_config import DefaultEventyConfig
 from eventy.config.eventy_config import set_config
@@ -59,6 +61,15 @@ def main():
         subscriber_types=[PrintSubscriber],
     ))
 
+    # Generate a random port between 8000 and 9000
+    random_port = random.randint(8000, 9000)
+    
+    # Add the port argument to sys.argv if not already specified
+    if '--port' not in sys.argv:
+        sys.argv.extend(['--port', str(random_port)])
+    
+    print(f"🎲 Using random port: {random_port}")
+    
     # Run main with this module's app
     fastapi_main("fastapi_example:app")
 
