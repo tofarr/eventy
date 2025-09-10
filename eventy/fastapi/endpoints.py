@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 from datetime import datetime
 import logging
 from typing import TypeVar, Union
@@ -7,7 +6,7 @@ from uuid import UUID, uuid4
 from eventy.event_queue import EventQueue
 from eventy.event_result import EventResult
 from eventy.config.eventy_config import EventyConfig
-from eventy.fastapi.websocket_subscriber import WEBSOCKETS, websocket_subscriber
+from eventy.fastapi.websocket_subscriber import SERIALIZERS, WEBSOCKETS, WebsocketSubscriber
 from eventy.queue_manager import QueueManager
 from eventy.queue_event import QueueEvent
 
@@ -22,7 +21,7 @@ from fastapi.websockets import WebSocket, WebSocketState
 from pydantic import BaseModel, TypeAdapter
 
 from eventy.serializers.pydantic_serializer import PydanticSerializer
-from eventy.serializers.serializer import Serializer
+from eventy.subscribers.subscriber import Subscriber, get_payload_type
 
 
 T = TypeVar("T")
@@ -53,18 +52,14 @@ def add_queue_endpoints(
         items: list[QueueEvent[payload_type]]  # type: ignore
         next_page_id: str | None
 
-    MAYBE WE HAVE SUBSCRIBER MAPPINGS RATHER THAN SUBSCRIBER TYPES?
-    OR MAYBE WE JUST CHECK IF WE CAN PICKLE DYNAMIC TYPES:
-    subscriber_types = [
-        s
-        for s in config.get_subscriber_types()
-        if s.get_payload_type() == payload_type
-        or issubclass(s.get_payload_type(), payload_type)
-    ]
-    websocket_subscriber_types = {}
-    for payload_type in config.get_payload_types():
-        websocket_subscriber_types[payload_type] = websocket_subscriber(payload_type)
-    subscriber_types.extend(websocket_subscriber_types.values())
+    subscriber_types = []
+    for subscriber_type in config.get_subscriber_types():
+        subscriber_payload_type = get_payload_type(subscriber_type)
+        if issubclass(subscriber_payload_type, payload_type):
+            subscriber_types.append(subscriber_type)
+    
+    websocket_subscriber_type = WebsocketSubscriber[payload_type]
+    subscriber_types.append(websocket_subscriber_type)
     
     subscriber_type = Union[tuple(subscriber_types)]
 
@@ -79,6 +74,9 @@ def add_queue_endpoints(
     class ResultPage(BaseModel):
         items: list[EventResult]
         next_page_id: str | None
+
+    type_adapter = TypeAdapter(payload_type)
+    SERIALIZERS[payload_type.__name__] = PydanticSerializer(type_adapter)
 
     @fastapi.post("/event")
     async def publish(payload: payload_type) -> EventResponse:  # type: ignore
@@ -200,10 +198,9 @@ def add_queue_endpoints(
         await websocket.accept()
         event_queue: EventQueue[T] = queue_manager.get_event_queue(payload_type)
         websocket_id = uuid4()
-        subscriber_type = websocket_subscriber_types[payload_type]
-        subscriber = subscriber_type(websocket_id=websocket_id)
-        listener_id = event_queue.subscribe(subscriber)
-        type_adapter = TypeAdapter(payload_type)
+        subscriber = WebsocketSubscriber(websocket_id=websocket_id, payload_type_name=payload_type.__name__)
+        WEBSOCKETS[websocket_id] = websocket
+        listener_id = await event_queue.subscribe(subscriber)
         try:
             while websocket.application_state == WebSocketState.CONNECTED:
                 data = await websocket.receive_json()
@@ -213,4 +210,4 @@ def add_queue_endpoints(
             _LOGGER.debug("websocket_closed")
         finally:
             await event_queue.unsubscribe(listener_id)
-            WEBSOCKETS.pop(websocket_id)
+            WEBSOCKETS.pop(websocket_id, None)

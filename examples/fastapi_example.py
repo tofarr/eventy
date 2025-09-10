@@ -1,5 +1,3 @@
-import os
-
 from pydantic import BaseModel
 
 from eventy.config.default_eventy_config import DefaultEventyConfig
