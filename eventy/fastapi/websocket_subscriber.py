@@ -18,13 +18,12 @@ T = TypeVar("T")
 
 class WebsocketSubscriber(BaseModel, Subscriber[T]):
     """Subscriber sending data to a websocket"""
+
     type_name: Literal["WebsocketSubscriber"]
     websocket_id: UUID
     payload_type_name: str
 
-    async def on_event(
-        self, event: QueueEvent[T], event_queue: EventQueue[T]
-    ) -> None:
+    async def on_event(self, event: QueueEvent[T], event_queue: EventQueue[T]) -> None:
         websocket = WEBSOCKETS.get(self.websocket_id)
         if not websocket:
             return
