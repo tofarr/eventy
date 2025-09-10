@@ -199,18 +199,18 @@ def add_queue_endpoints(
         websocket: WebSocket,
     ):
         await websocket.accept()
-        event_queue: EventQueue[T] = queue_manager.get_event_queue(payload_type)
+        event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
         websocket_id = uuid4()
-        subscriber = WebsocketSubscriber(websocket_id=websocket_id, payload_type_name=payload_type.__name__)
+        subscriber = WebsocketSubscriber(type_name="WebsocketSubscriber", websocket_id=websocket_id, payload_type_name=payload_type.__name__)
         WEBSOCKETS[websocket_id] = websocket
-        listener_id = await event_queue.subscribe(subscriber)
+        subscription = await event_queue.subscribe(subscriber)
         try:
             while websocket.application_state == WebSocketState.CONNECTED:
                 data = await websocket.receive_json()
-                payload = type_adapter.validate_json(data)
+                payload = type_adapter.validate_python(data)
                 await event_queue.publish(payload)
         except WebSocketDisconnect as e:
             _LOGGER.debug("websocket_closed")
         finally:
-            await event_queue.unsubscribe(listener_id)
+            await event_queue.unsubscribe(subscription.id)
             WEBSOCKETS.pop(websocket_id, None)
