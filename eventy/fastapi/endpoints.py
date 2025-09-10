@@ -28,9 +28,9 @@ T = TypeVar("T")
 _LOGGER = logging.getLogger(__name__)
 
 
-def add_endpoints(fastapi: FastAPI, queue_manager: QueueManager, config: EventyConfig):
+async def add_endpoints(fastapi: FastAPI, queue_manager: QueueManager, config: EventyConfig):
     for payload_type in config.get_payload_types():
-        queue_manager.register(payload_type)
+        await queue_manager.register(payload_type)
         router = APIRouter(prefix=f"/{payload_type.__name__}")
         add_queue_endpoints(router, payload_type, queue_manager, config)
         fastapi.include_router(router)

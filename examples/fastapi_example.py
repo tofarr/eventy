@@ -13,7 +13,7 @@ class MyMsg(BaseModel):
     msg: str | None = None
 
 
-class PrintSubscriber(Subscriber[MyMsg], BaseModel):
+class PrintSubscriber(BaseModel, Subscriber[MyMsg]):
     type_name: Literal["PrintSubscriber"]
 
     async def on_event(

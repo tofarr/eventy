@@ -32,7 +32,7 @@ async def lifespan(app: FastAPI):
     queue_manager = await get_default_queue_manager()
     async with queue_manager:
         config = get_config()
-        add_endpoints(app, queue_manager, config)
+        await add_endpoints(app, queue_manager, config)
         yield
 
 
