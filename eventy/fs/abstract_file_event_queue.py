@@ -195,7 +195,7 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
 
     async def search_events(
         self,
-        page_id: Optional[int] = None,
+        page_id: Optional[str] = None,
         limit: int = 100,
         created_at__gte: Optional[datetime] = None,
         created_at__lte: Optional[datetime] = None,
@@ -218,7 +218,7 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
         if end_index < len(all_events):
             next_page_id = end_index
 
-        return Page(items=page_events, next_page_id=next_page_id)
+        return Page(items=page_events, next_page_id=str(next_page_id))
 
     async def subscribe(
         self,
@@ -230,14 +230,14 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
         self._check_running()
 
         # Validate subscriber payload type compatibility
-        if not hasattr(subscriber, "payload_type") or subscriber.payload_type is None:
+        if subscriber.get_payload_type() is None:
             raise TypeError(
                 f"Subscriber {subscriber} must have a payload_type attribute"
             )
 
-        if not issubclass(self.payload_type, subscriber.payload_type):
+        if not issubclass(self.payload_type, subscriber.get_payload_type()):
             raise TypeError(
-                f"Subscriber payload_type {subscriber.payload_type.__name__} is not compatible "
+                f"Subscriber payload_type {subscriber.get_payload_type().__name__} is not compatible "
                 f"with queue payload_type {self.payload_type.__name__}. The queue's payload_type must "
                 f"be the same as or a subclass of the subscriber's payload_type."
             )
@@ -333,7 +333,7 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
         if end_index < len(all_subscriptions):
             next_page_id = str(end_index)
 
-        return Page(items=page_subscriptions, next_page_id=next_page_id)
+        return Page(items=page_subscriptions, next_page_id=str(next_page_id))
 
     async def get_result(self, result_id: UUID) -> EventResult:
         """Get an event result given its id"""
@@ -380,7 +380,7 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
 
     async def search_results(
         self,
-        page_id: Optional[int] = None,
+        page_id: Optional[str] = None,
         limit: int = 100,
         event_id__eq: Optional[int] = None,
         worker_id__eq: Optional[int] = None,
@@ -410,7 +410,7 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
         if end_index < len(all_results):
             next_page_id = end_index
 
-        return Page(items=page_results, next_page_id=next_page_id)
+        return Page(items=page_results, next_page_id=str(next_page_id))
 
     async def count_results(
         self,
@@ -612,7 +612,7 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
         if end_index < len(all_claims):
             next_page_id = str(end_index)
 
-        return Page(items=page_claims, next_page_id=next_page_id)
+        return Page(items=page_claims, next_page_id=str(next_page_id))
 
     async def count_claims(
         self,

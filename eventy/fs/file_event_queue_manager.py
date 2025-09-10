@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -69,6 +70,8 @@ class FileEventQueueManager(QueueManager):
         # Ensure root directory exists
         self.root_dir.mkdir(parents=True, exist_ok=True)
 
+        await asyncio.gather(*[queue.__aenter__() for queue in self._queues.values()])
+
         _LOGGER.info(f"Started FileEventQueueManager at {self.root_dir}")
         return self
 
@@ -77,27 +80,21 @@ class FileEventQueueManager(QueueManager):
         self._entered = False
 
         # Close all queues
-        for payload_type, queue in self._queues.items():
-            try:
-                await queue.__aexit__(exc_type, exc_value, traceback)
-                _LOGGER.debug(f"Closed queue for payload type: {payload_type}")
-            except Exception as e:
-                _LOGGER.warning(
-                    f"Error closing queue for {payload_type}: {e}", exc_info=True
-                )
+        await asyncio.gather(*[queue.__aexit__(exc_type, exc_value, traceback) for queue in self._queues.values()])
 
         self._queues.clear()
         _LOGGER.info(f"Stopped FileEventQueueManager at {self.root_dir}")
 
     def _create_queue(self, payload_type: type[T]) -> EventQueue[T]:
         """Create a new event queue instance based on watchdog availability"""
+        queue_dir = self.root_dir / payload_type.__name__
         if self._use_watchdog:
             # Use inline import to avoid import errors when watchdog is not available
             try:
                 from eventy.fs.watchdog_file_event_queue import WatchdogFileEventQueue
 
                 queue = WatchdogFileEventQueue(
-                    root_dir=self.root_dir,
+                    root_dir=queue_dir,
                     payload_type=payload_type,
                     event_serializer=self.serializer,
                     result_serializer=self.serializer,
@@ -113,7 +110,7 @@ class FileEventQueueManager(QueueManager):
 
         # Use polling queue as fallback or primary choice
         queue = PollingFileEventQueue(
-            root_dir=self.root_dir,
+            root_dir=queue_dir,
             payload_type=payload_type,
             event_serializer=self.serializer,
             result_serializer=self.serializer,
@@ -141,7 +138,6 @@ class FileEventQueueManager(QueueManager):
 
     async def register(self, payload_type: type[T]) -> None:
         """Register a payload type (Create an event queue)"""
-        self._check_entered()
 
         if payload_type in self._queues:
             _LOGGER.info(f"Queue for payload type {payload_type} already registered")
@@ -150,8 +146,8 @@ class FileEventQueueManager(QueueManager):
         # Create new file event queue
         queue = self._create_queue(payload_type)
 
-        # Start the queue
-        await queue.__aenter__()
+        if self._entered:
+            await queue.__aenter__()
 
         self._queues[payload_type] = queue
         _LOGGER.info(f"Registered queue for payload type: {payload_type}")
@@ -167,7 +163,8 @@ class FileEventQueueManager(QueueManager):
         # Close the queue
         queue = self._queues[payload_type]
         try:
-            await queue.__aexit__(None, None, None)
+            if self._entered:
+                await queue.__aexit__(None, None, None)
         except Exception as e:
             _LOGGER.warning(
                 f"Error closing queue for {payload_type}: {e}", exc_info=True

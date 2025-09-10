@@ -17,7 +17,7 @@ from eventy.event_queue import EventQueue
 from eventy.queue_manager import get_default_queue_manager
 from eventy.subscribers.subscriber import Subscriber
 from eventy.queue_event import QueueEvent
-from eventy.subscribers.worker_match_subscriber import WorkerMatchSubscriber
+from eventy.subscribers.worker_match_subscriber import worker_match_subscriber
 
 
 @dataclass
@@ -31,8 +31,8 @@ class MyMessage:
 class PrintSubscriber(Subscriber[MyMessage]):
     """Simple subscriber that prints received events to the console."""
 
-    @property
-    def payload_type(self):
+    @staticmethod
+    def get_payload_type():
         return MyMessage
 
     async def on_event(
@@ -46,6 +46,9 @@ class PrintSubscriber(Subscriber[MyMessage]):
         print()
 
 
+WorkerMatchPrintSubscriber = worker_match_subscriber(PrintSubscriber)
+
+
 async def main():
     """Main function demonstrating the eventy queue usage."""
     print("🚀 Eventy Queue Example with MyMessage")
@@ -53,7 +56,7 @@ async def main():
     print()
 
     # Create a queue manager and register our message type
-    queue_manager = get_default_queue_manager()
+    queue_manager = await get_default_queue_manager()
     async with queue_manager:
         await queue_manager.register(MyMessage)
         print(f"✅ Registered MyMessage with the {queue_manager.__class__.__name__}")
@@ -65,7 +68,7 @@ async def main():
             print(f"✅ Retrieved event queue with worker ID: {queue.get_worker_id()}")
 
             # Create and subscribe a print subscriber
-            subscriber = WorkerMatchSubscriber(PrintSubscriber(), queue.get_worker_id())
+            subscriber = WorkerMatchPrintSubscriber(PrintSubscriber(), queue.get_worker_id())
             subscription = await queue.subscribe(subscriber, 0)
             print(f"✅ Subscribed PrintSubscriber with ID: {subscription.id}")
             print()

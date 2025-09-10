@@ -9,6 +9,8 @@ This module provides a FastAPI application that:
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from eventy.config.eventy_config import get_config
+from eventy.fastapi.endpoints import add_endpoints
 from eventy.queue_manager import get_default_queue_manager
 
 
@@ -27,15 +29,11 @@ async def lifespan(app: FastAPI):
     global queue_manager
     
     # Startup: Initialize and enter the queue manager
-    queue_manager = get_default_queue_manager()
-    await queue_manager.__aenter__()
-    
-    try:
+    queue_manager = await get_default_queue_manager()
+    async with queue_manager:
+        config = get_config()
+        add_endpoints(app, queue_manager, config)
         yield
-    finally:
-        # Shutdown: Exit the queue manager
-        if queue_manager:
-            await queue_manager.__aexit__(None, None, None)
 
 
 # Create FastAPI app with lifecycle management
@@ -45,21 +43,6 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan
 )
-
-
-@app.get("/")
-async def hello_world():
-    """
-    Hello world endpoint.
-    
-    Returns:
-        dict: A simple greeting message with queue manager status
-    """
-    return {
-        "message": "Hello, World!",
-        "status": "Queue manager is running",
-        "queue_manager_type": queue_manager.__class__.__name__ if queue_manager else "None"
-    }
 
 
 @app.get("/health")

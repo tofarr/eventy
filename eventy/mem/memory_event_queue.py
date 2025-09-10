@@ -144,7 +144,7 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
         if end_index < len(subscriptions):
             next_page_id = str(end_index)
 
-        return Page(items=page_items, next_page_id=next_page_id)
+        return Page(items=page_items, next_page_id=str(next_page_id))
 
     async def publish(self, payload: T) -> QueueEvent[T]:
         """Publish an event to this queue"""
@@ -190,7 +190,7 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
 
     async def search_events(
         self,
-        page_id: Optional[int] = None,
+        page_id: Optional[str] = None,
         limit: int = 100,
         created_at__gte: Optional[datetime] = None,
         created_at__lte: Optional[datetime] = None,
@@ -224,7 +224,7 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
         if end_index < len(filtered_events):
             next_page_id = end_index
 
-        return Page(items=page_items, next_page_id=next_page_id)
+        return Page(items=page_items, next_page_id=str(next_page_id))
 
     async def get_result(self, result_id: UUID) -> EventResult:
         """Get an event result given its id"""
@@ -237,7 +237,7 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
 
     async def search_results(
         self,
-        page_id: Optional[int] = None,
+        page_id: Optional[str] = None,
         limit: int = 100,
         event_id__eq: Optional[int] = None,
         worker_id__eq: Optional[int] = None,
@@ -273,7 +273,7 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
         if end_index < len(filtered_results):
             next_page_id = str(end_index)
 
-        return Page(items=page_items, next_page_id=next_page_id)
+        return Page(items=page_items, next_page_id=str(next_page_id))
 
     async def count_results(
         self,
@@ -366,7 +366,7 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
         if end_index < len(filtered_claims):
             next_page_id = str(end_index)
 
-        return Page(items=page_items, next_page_id=next_page_id)
+        return Page(items=page_items, next_page_id=str(next_page_id))
 
     async def count_claims(
         self,

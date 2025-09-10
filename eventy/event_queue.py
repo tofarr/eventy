@@ -131,7 +131,7 @@ class EventQueue(Generic[T], ABC):
     @abstractmethod
     async def search_events(
         self,
-        page_id: Optional[int] = None,
+        page_id: Optional[str] = None,
         limit: int = 100,
         created_at__gte: Optional[datetime] = None,
         created_at__lte: Optional[datetime] = None,
@@ -178,7 +178,7 @@ class EventQueue(Generic[T], ABC):
     @abstractmethod
     async def search_results(
         self,
-        page_id: Optional[int] = None,
+        page_id: Optional[str] = None,
         limit: int = 100,
         event_id__eq: Optional[int] = None,
         worker_id__eq: Optional[int] = None,

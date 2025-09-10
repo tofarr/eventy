@@ -5,7 +5,7 @@ from typing import TypeVar, Optional
 
 from eventy.constants import EVENTY_QUEUE_MANAGER, EVENTY_ROOT_DIR
 from eventy.event_queue import EventQueue
-from eventy.eventy_config import get_config
+from eventy.config.eventy_config import get_config
 from eventy.util import get_impl
 
 T = TypeVar("T")
@@ -42,7 +42,7 @@ class QueueManager(ABC):
 _default_queue_manager: Optional[QueueManager] = None
 
 
-def get_default_queue_manager() -> QueueManager:
+async def get_default_queue_manager() -> QueueManager:
     """Get the default queue manager instance with caching.
 
     The implementation can be overridden by setting the EVENTY_QUEUE_MANAGER
@@ -72,7 +72,7 @@ def get_default_queue_manager() -> QueueManager:
         try:
             config = get_config()
             for payload_type in config.get_payload_types():
-                _default_queue_manager.register(payload_type)
+                await _default_queue_manager.register(payload_type)
         except ValueError:
             _LOGGER.info("no_initial_payload_types")
 

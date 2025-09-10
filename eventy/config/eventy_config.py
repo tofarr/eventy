@@ -16,6 +16,17 @@ class EventyConfig(ABC):
         """Get all payload types"""
 
 
+_config: EventyConfig | None = None
+
+
 def get_config() -> EventyConfig:
-    config_type = get_impl(EVENTY_CONFIG, EventyConfig)
-    return config_type()
+    global _config
+    if _config is None:
+        config_type = get_impl(EVENTY_CONFIG, EventyConfig)
+        _config = config_type()
+    return _config
+
+
+def set_config(config: EventyConfig):
+    global _config
+    _config = config

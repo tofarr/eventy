@@ -1,24 +1,28 @@
+from dataclasses import dataclass
 from datetime import datetime
 import logging
 from typing import TypeVar, Union
 from uuid import UUID, uuid4
+
 from eventy.event_queue import EventQueue
 from eventy.event_result import EventResult
-from eventy.eventy_config import EventyConfig
-from eventy.fastapi.websocket_subscriber import WEBSOCKETS, WebsocketSubscriber
+from eventy.config.eventy_config import EventyConfig
+from eventy.fastapi.websocket_subscriber import WEBSOCKETS, websocket_subscriber
 from eventy.queue_manager import QueueManager
+from eventy.queue_event import QueueEvent
+
 from fastapi import (
     APIRouter,
     FastAPI,
     HTTPException,
     status,
-    WebSocket,
     WebSocketDisconnect,
-    WebSocketState,
 )
-from pydantic import BaseModel
+from fastapi.websockets import WebSocket, WebSocketState
+from pydantic import BaseModel, TypeAdapter
 
-from eventy.subscribers.subscriber import Subscriber
+from eventy.serializers.pydantic_serializer import PydanticSerializer
+from eventy.serializers.serializer import Serializer
 
 
 T = TypeVar("T")
@@ -27,8 +31,10 @@ _LOGGER = logging.getLogger(__name__)
 
 def add_endpoints(fastapi: FastAPI, queue_manager: QueueManager, config: EventyConfig):
     for payload_type in config.get_payload_types():
+        queue_manager.register(payload_type)
         router = APIRouter(prefix=f"/{payload_type.__name__}")
         add_queue_endpoints(router, payload_type, queue_manager, config)
+        fastapi.include_router(router)
 
 
 def add_queue_endpoints(
@@ -44,17 +50,21 @@ def add_queue_endpoints(
         created_at: datetime
 
     class EventPage(BaseModel):
-        items: list[payload_type]  # type: ignore
+        items: list[QueueEvent[payload_type]]  # type: ignore
         next_page_id: str | None
 
-    subscriber_type = Union[
-        tuple(
-            s
-            for s in config.get_subscriber_types()
-            if s.payload_type == payload_type
-            or issubclass(s.payload_type, payload_type)
-        )
+    subscriber_types = [
+        s
+        for s in config.get_subscriber_types()
+        if s.get_payload_type() == payload_type
+        or issubclass(s.get_payload_type(), payload_type)
     ]
+    websocket_subscriber_types = {}
+    for payload_type in config.get_payload_types():
+        websocket_subscriber_types[payload_type] = websocket_subscriber(payload_type)
+    subscriber_types.extend(websocket_subscriber_types.values())
+    
+    subscriber_type = Union[tuple(subscriber_types)]
 
     class SubscriptionResponse(BaseModel):
         id: UUID
@@ -69,7 +79,7 @@ def add_queue_endpoints(
         next_page_id: str | None
 
     @fastapi.post("/event")
-    async def publish(payload: payload_type) -> ResponseEvent:  # type: ignore
+    async def publish(payload: payload_type) -> EventResponse:  # type: ignore
         event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
         event = await event_queue.publish(payload)
         return event
@@ -166,11 +176,11 @@ def add_queue_endpoints(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
     @fastapi.get("/result/{id}")
-    async def get_result(subscriber: subscriber_type) -> EventResult:  # type: ignore
+    async def get_result(id: UUID) -> EventResult:  # type: ignore
         event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
         try:
-            subscriber = await event_queue.get_subscriber(id)
-            return SubscriptionResponse(id, subscriber)
+            result = await event_queue.get_result(id)
+            return SubscriptionResponse(id, result)
         except Exception:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
@@ -188,13 +198,14 @@ def add_queue_endpoints(
         await websocket.accept()
         event_queue: EventQueue[T] = queue_manager.get_event_queue(payload_type)
         websocket_id = uuid4()
-        listener_id = event_queue.subscribe(
-            WebsocketSubscriber(websocket_id=websocket_id)
-        )
+        subscriber_type = websocket_subscriber_types[payload_type]
+        subscriber = subscriber_type(websocket_id=websocket_id)
+        listener_id = event_queue.subscribe(subscriber)
+        type_adapter = TypeAdapter(payload_type)
         try:
             while websocket.application_state == WebSocketState.CONNECTED:
                 data = await websocket.receive_json()
-                payload = payload_type.model_validate(data)
+                payload = type_adapter.validate_json(data)
                 await event_queue.publish(payload)
         except WebSocketDisconnect as e:
             _LOGGER.debug("websocket_closed")

@@ -1,3 +1,4 @@
+import asyncio
 from dataclasses import dataclass, field
 from typing import TypeVar, Dict
 import logging
@@ -32,6 +33,8 @@ class MemoryQueueManager(QueueManager):
     async def __aenter__(self):
         """Begin using this queue manager"""
         self._entered = True
+
+        await asyncio.gather(*[queue.__aenter__() for queue in self._queues.values()])
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
@@ -39,11 +42,7 @@ class MemoryQueueManager(QueueManager):
         self._entered = False
 
         # Close all queues
-        for queue in self._queues.values():
-            try:
-                await queue.__aexit__(exc_type, exc_value, traceback)
-            except Exception as e:
-                _LOGGER.warning(f"Error closing queue: {e}", exc_info=True)
+        await asyncio.gather(*[queue.__aexit__(exc_type, exc_value, traceback) for queue in self._queues.values()])
 
         self._queues.clear()
 
@@ -64,7 +63,6 @@ class MemoryQueueManager(QueueManager):
 
     async def register(self, payload_type: type[T]) -> None:
         """Register a payload type (Create an event queue)"""
-        self._check_entered()
 
         if payload_type in self._queues:
             _LOGGER.info(f"Queue for payload type {payload_type} already registered")
@@ -74,7 +72,8 @@ class MemoryQueueManager(QueueManager):
         queue = MemoryEventQueue(payload_type=payload_type, serializer=self.serializer)
 
         # Enter the queue context manually
-        queue._entered = True
+        if self._entered:
+            await queue.__aenter__()
 
         self._queues[payload_type] = queue
         _LOGGER.info(f"Registered queue for payload type: {payload_type}")
@@ -90,7 +89,8 @@ class MemoryQueueManager(QueueManager):
         # Close the queue
         queue = self._queues[payload_type]
         try:
-            await queue.__aexit__(None, None, None)
+            if self._entered:
+                await queue.__aexit__(None, None, None)
         except Exception as e:
             _LOGGER.warning(
                 f"Error closing queue for {payload_type}: {e}", exc_info=True
