@@ -78,8 +78,8 @@ def add_queue_endpoints(
         items: list[EventResult]
         next_page_id: str | None
 
-    type_adapter = TypeAdapter(payload_type)
-    SERIALIZERS[payload_type.__name__] = PydanticSerializer(type_adapter)
+    payload_type_adapter = TypeAdapter(payload_type)
+    SERIALIZERS[payload_type.__name__] = PydanticSerializer(TypeAdapter(QueueEvent[payload_type]))
 
     @fastapi.post("/event")
     async def publish(payload: payload_type) -> EventResponse:  # type: ignore
@@ -207,7 +207,7 @@ def add_queue_endpoints(
         try:
             while websocket.application_state == WebSocketState.CONNECTED:
                 data = await websocket.receive_json()
-                payload = type_adapter.validate_python(data)
+                payload = payload_type_adapter.validate_python(data)
                 await event_queue.publish(payload)
         except WebSocketDisconnect as e:
             _LOGGER.debug("websocket_closed")

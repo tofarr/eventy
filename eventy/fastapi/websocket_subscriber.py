@@ -1,3 +1,4 @@
+import json
 from fastapi.websockets import WebSocket, WebSocketState
 from typing import Literal, TypeVar
 from uuid import UUID
@@ -24,16 +25,15 @@ class WebsocketSubscriber(BaseModel, Subscriber[T]):
     async def on_event(
         self, event: QueueEvent[T], event_queue: EventQueue[T]
     ) -> None:
-        """Send event to websocket if connected and matches worker ID"""
-        # Only send to websocket if it matches the current worker
-        if event_queue.get_worker_id() != self.websocket_id:
-            return
-
         websocket = WEBSOCKETS.get(self.websocket_id)
         if not websocket:
             return
         if websocket.application_state != WebSocketState.CONNECTED:
             return
         serializer = SERIALIZERS.get(self.payload_type_name)
-        data = serializer.serialize(event)
-        await websocket.send_text(data)
+        if serializer.is_json:
+            data = json.loads(serializer.serialize(event))
+            await websocket.send_json(data)
+        else:
+            data = serializer.serialize(event)
+            await websocket.send_bytes(data)
