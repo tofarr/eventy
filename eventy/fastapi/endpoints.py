@@ -1,6 +1,6 @@
 from datetime import datetime
 import logging
-from typing import TypeVar, Union
+from typing import Annotated, TypeVar, Union
 from uuid import UUID, uuid4
 
 from eventy.event_queue import EventQueue
@@ -18,7 +18,7 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.websockets import WebSocket, WebSocketState
-from pydantic import BaseModel, TypeAdapter
+from pydantic import BaseModel, Field, TypeAdapter
 
 from eventy.serializers.pydantic_serializer import PydanticSerializer
 from eventy.subscribers.subscriber import Subscriber, get_payload_type
@@ -61,7 +61,10 @@ def add_queue_endpoints(
     websocket_subscriber_type = WebsocketSubscriber[payload_type]
     subscriber_types.append(websocket_subscriber_type)
     
-    subscriber_type = Union[tuple(subscriber_types)]
+    if len(subscriber_types) > 1:
+        subscriber_type = Annotated[Union[tuple(subscriber_types)], Field(discriminator="type_name")]
+    else:
+        subscriber_type = subscriber_types[0]
 
     class SubscriptionResponse(BaseModel):
         id: UUID

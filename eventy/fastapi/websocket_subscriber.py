@@ -1,9 +1,9 @@
 from dataclasses import dataclass, field
 from fastapi.websockets import WebSocket, WebSocketState
-from typing import TypeVar
+from typing import Literal, TypeVar
 from uuid import UUID
 
-from pydantic import TypeAdapter
+from pydantic import BaseModel, TypeAdapter
 from eventy.event_queue import EventQueue
 from eventy.queue_event import QueueEvent
 from eventy.serializers.pydantic_serializer import PydanticSerializer
@@ -17,10 +17,9 @@ SERIALIZERS: dict[UUID, Serializer] = {}
 T = TypeVar("T")
 
 
-@dataclass
-class WebsocketSubscriber(Subscriber[T]):
+class WebsocketSubscriber(Subscriber[T], BaseModel):
     """Subscriber sending data to a websocket"""
-
+    type_name: Literal["WebsocketSubscriber"]
     websocket_id: UUID
 
     async def on_event(

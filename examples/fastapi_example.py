@@ -1,3 +1,4 @@
+from typing import Literal
 from pydantic import BaseModel
 
 from eventy.config.default_eventy_config import DefaultEventyConfig
@@ -12,12 +13,8 @@ class MyMsg(BaseModel):
     msg: str | None = None
 
 
-
 class PrintSubscriber(Subscriber[MyMsg], BaseModel):
-
-    @staticmethod
-    def get_payload_type():
-        return MyMsg
+    type_name: Literal["PrintSubscriber"]
 
     async def on_event(
         self, event: QueueEvent[MyMsg], event_queue: EventQueue[MyMsg]
