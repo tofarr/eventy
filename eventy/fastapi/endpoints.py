@@ -53,6 +53,8 @@ def add_queue_endpoints(
         items: list[QueueEvent[payload_type]]  # type: ignore
         next_page_id: str | None
 
+    MAYBE WE HAVE SUBSCRIBER MAPPINGS RATHER THAN SUBSCRIBER TYPES?
+    OR MAYBE WE JUST CHECK IF WE CAN PICKLE DYNAMIC TYPES:
     subscriber_types = [
         s
         for s in config.get_subscriber_types()

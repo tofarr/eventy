@@ -209,16 +209,16 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
             all_events.append(event)
 
         # Handle pagination
-        start_index = page_id if page_id is not None else 0
+        start_index = int(page_id) if page_id is not None else 0
         end_index = start_index + limit
         page_events = all_events[start_index:end_index]
 
         # Determine next page ID
         next_page_id = None
         if end_index < len(all_events):
-            next_page_id = end_index
+            next_page_id = str(end_index)
 
-        return Page(items=page_events, next_page_id=str(next_page_id))
+        return Page(items=page_events, next_page_id=next_page_id)
 
     async def subscribe(
         self,
@@ -228,19 +228,6 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
     ) -> Subscription[T]:
         """Add a subscriber to this queue"""
         self._check_running()
-
-        # Validate subscriber payload type compatibility
-        if subscriber.get_payload_type() is None:
-            raise TypeError(
-                f"Subscriber {subscriber} must have a payload_type attribute"
-            )
-
-        if not issubclass(self.payload_type, subscriber.get_payload_type()):
-            raise TypeError(
-                f"Subscriber payload_type {subscriber.get_payload_type().__name__} is not compatible "
-                f"with queue payload_type {self.payload_type.__name__}. The queue's payload_type must "
-                f"be the same as or a subclass of the subscriber's payload_type."
-            )
 
         # Check for existing subscriber if requested
         if check_subscriber_unique:
@@ -333,7 +320,7 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
         if end_index < len(all_subscriptions):
             next_page_id = str(end_index)
 
-        return Page(items=page_subscriptions, next_page_id=str(next_page_id))
+        return Page(items=page_subscriptions, next_page_id=next_page_id)
 
     async def get_result(self, result_id: UUID) -> EventResult:
         """Get an event result given its id"""
@@ -401,16 +388,16 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
         all_results.sort(key=lambda r: r.created_at)
 
         # Handle pagination
-        start_index = page_id if page_id is not None else 0
+        start_index = int(page_id) if page_id is not None else 0
         end_index = start_index + limit
         page_results = all_results[start_index:end_index]
 
         # Determine next page ID
         next_page_id = None
         if end_index < len(all_results):
-            next_page_id = end_index
+            next_page_id = str(end_index)
 
-        return Page(items=page_results, next_page_id=str(next_page_id))
+        return Page(items=page_results, next_page_id=next_page_id)
 
     async def count_results(
         self,
@@ -612,7 +599,7 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
         if end_index < len(all_claims):
             next_page_id = str(end_index)
 
-        return Page(items=page_claims, next_page_id=str(next_page_id))
+        return Page(items=page_claims, next_page_id=next_page_id)
 
     async def count_claims(
         self,

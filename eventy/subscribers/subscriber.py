@@ -15,11 +15,6 @@ class Subscriber(Generic[T], ABC):
     data from a persistence layer.
     """
 
-    @staticmethod
-    @abstractmethod
-    def get_payload_type() -> type[T]:
-        """ Get the type of payload for this subscriber """
-
     @abstractmethod
     async def on_event(
         self, event: QueueEvent[T], event_queue: "EventQueue[T]"
