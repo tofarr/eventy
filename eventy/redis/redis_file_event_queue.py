@@ -16,6 +16,7 @@ except ImportError:
 
 from eventy.claim import Claim
 from eventy.event_result import EventResult
+from eventy.eventy_error import EventyError
 from eventy.fs.abstract_file_event_queue import AbstractFileEventQueue
 from eventy.queue_event import QueueEvent
 from eventy.subscribers.subscriber import Subscriber
@@ -52,6 +53,9 @@ class RedisFileEventQueue(AbstractFileEventQueue[T]):
     resync: bool = field(default=False)
     resync_lock_timeout_seconds: int = field(default=30)
     
+    # Enable/disable pubsub monitoring (useful for testing)
+    enable_pubsub_monitor: bool = field(default=True)
+    
     # Redis connection and pubsub
     _redis: Optional[redis.Redis] = field(default=None, init=False)
     _pubsub: Optional[redis.client.PubSub] = field(default=None, init=False)
@@ -85,9 +89,10 @@ class RedisFileEventQueue(AbstractFileEventQueue[T]):
         self._pubsub = self._redis.pubsub()
         await self._pubsub.subscribe(self._get_pubsub_channel())
         
-        # Start background pubsub monitoring
+        # Start background pubsub monitoring (if enabled)
         self._stop_pubsub = False
-        self._pubsub_task = asyncio.create_task(self._pubsub_monitor_loop())
+        if self.enable_pubsub_monitor:
+            self._pubsub_task = asyncio.create_task(self._pubsub_monitor_loop())
         
         # Handle resync if requested
         if self.resync:
@@ -234,7 +239,7 @@ class RedisFileEventQueue(AbstractFileEventQueue[T]):
         lock_data = await self._redis.get(redis_key)
         
         if lock_data is None:
-            raise KeyError(f"Claim {claim_id} not found")
+            raise EventyError(f"Claim {claim_id} not found")
             
         # Parse Redis lock data and create Claim object
         lock_info = json.loads(lock_data)
