@@ -34,7 +34,7 @@ EVENTY_ROOT_DIR = "EVENTY_ROOT_DIR"
 """Environment variable to specify the root directory for file system based implementation
 """
 
-DEFAULT_ROOT_DIR = str(Path(os.path.expanduser("~")) / ".eventy")
+DEFAULT_ROOT_DIR = str(".eventy")
 """ Default root directory
 """
 
