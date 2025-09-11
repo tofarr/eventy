@@ -485,3 +485,41 @@ class RedisFileEventQueue(AbstractFileEventQueue[T]):
         finally:
             # Release the lock
             await self._redis.delete(lock_key)
+            
+    async def reset(self):
+        """Reset the queue by clearing all filesystem and Redis data"""
+        import shutil
+        
+        # Clear filesystem data (same as parent class reset)
+        if self.events_dir.exists():
+            shutil.rmtree(self.events_dir)
+        if self.results_dir.exists():
+            shutil.rmtree(self.results_dir)
+        if self.claims_dir.exists():
+            shutil.rmtree(self.claims_dir)
+        if self.subscriptions_dir.exists():
+            shutil.rmtree(self.subscriptions_dir)
+            
+        # Reset counters
+        self.processed_event_id = 0
+        self.next_event_id = 1
+        
+        # Clear Redis data (if Redis is available)
+        if self._redis:
+            try:
+                # Clear Redis keys for this queue
+                pattern = f"{self.redis_prefix}:{self.root_dir.name}:*"
+                keys = await self._redis.keys(pattern)
+                if keys:
+                    await self._redis.delete(*keys)
+                    _LOGGER.info(f"Cleared {len(keys)} Redis keys for queue")
+            except Exception as e:
+                _LOGGER.warning(f"Error clearing Redis data: {e}")
+                
+        # Recreate directories
+        self.events_dir.mkdir(parents=True, exist_ok=True)
+        self.results_dir.mkdir(parents=True, exist_ok=True)
+        self.claims_dir.mkdir(parents=True, exist_ok=True)
+        self.subscriptions_dir.mkdir(parents=True, exist_ok=True)
+        
+        _LOGGER.info(f"Reset Redis file event queue at {self.root_dir}")
