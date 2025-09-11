@@ -8,19 +8,19 @@ from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from eventy.event_queue import EventQueue
-from eventy.redis import RedisFileEventQueue
+from eventy.redis.redis_file_event_queue import RedisFileEventQueue
 from tests.abstract_event_queue_base import AbstractEventQueueTestBase
 
 
 @dataclass
-class TestPayload:
+class MockPayload:
     """Simple test payload for testing"""
 
     message: str
     value: int
 
 
-class TestSubscriber:
+class MockSubscriber:
     """Simple test subscriber that can be pickled"""
 
     async def on_event(self, event, event_queue) -> None:
@@ -98,11 +98,11 @@ class TestRedisFileEventQueueSpecific(unittest.IsolatedAsyncioTestCase):
         if hasattr(self, "temp_dir"):
             shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    async def create_redis_queue(self) -> RedisFileEventQueue[TestPayload]:
+    async def create_redis_queue(self) -> RedisFileEventQueue[MockPayload]:
         """Create a RedisFileEventQueue instance for Redis-specific testing"""
         return RedisFileEventQueue(
             root_dir=self.root_path,
-            payload_type=TestPayload,
+            payload_type=MockPayload,
             redis_url="redis://localhost:6379",
             redis_db=1,
             redis_prefix="test_redis",
@@ -137,7 +137,7 @@ class TestRedisFileEventQueueSpecific(unittest.IsolatedAsyncioTestCase):
 
         with patch("redis.asyncio.from_url", return_value=mock_redis):
             async with queue:
-                payload = TestPayload(message="test", value=42)
+                payload = MockPayload(message="test", value=42)
                 event = await queue.publish(payload)
 
                 assert event.payload == payload
@@ -231,7 +231,7 @@ class TestRedisFileEventQueueSpecific(unittest.IsolatedAsyncioTestCase):
 
     async def test_subscribe_publishes_to_redis(self):
         """Test that subscribing publishes to Redis pubsub"""
-        subscriber = TestSubscriber()
+        subscriber = MockSubscriber()
 
         mock_redis = AsyncMock()
         mock_redis.publish.return_value = 1
@@ -257,7 +257,7 @@ class TestRedisFileEventQueueSpecific(unittest.IsolatedAsyncioTestCase):
 
     async def test_unsubscribe_publishes_to_redis(self):
         """Test that unsubscribing publishes to Redis pubsub"""
-        subscriber = TestSubscriber()
+        subscriber = MockSubscriber()
 
         mock_redis = AsyncMock()
         mock_redis.publish.return_value = 1
@@ -323,7 +323,7 @@ class TestRedisFileEventQueueSpecific(unittest.IsolatedAsyncioTestCase):
             # Should not raise exception, should handle gracefully
             async with queue:
                 # Basic operations should still work (fallback to filesystem)
-                payload = TestPayload(message="test", value=42)
+                payload = MockPayload(message="test", value=42)
                 event = await queue.publish(payload)
                 assert event.payload == payload
 

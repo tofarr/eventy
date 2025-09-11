@@ -12,8 +12,8 @@
             "console": "integratedTerminal",
             "env": {
                 "DEBUG": "1",
-                "EVENTY_ROOT_DIR": "tmp"
-            },
+                "EVENTY_REDIS_URL": "redis://localhost:6379"
+            }
         },
         {
             "name": "PyTest",

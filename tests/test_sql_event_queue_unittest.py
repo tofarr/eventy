@@ -1,12 +1,9 @@
 """Tests for SQL event queue implementation using unittest."""
 
-import asyncio
 import os
 import tempfile
 import unittest
 from dataclasses import dataclass
-from pathlib import Path
-from uuid import uuid4
 
 try:
     from eventy.sql.sql_event_queue import SqlEventQueue
@@ -15,13 +12,12 @@ try:
 except ImportError:
     SQL_AVAILABLE = False
 
-from eventy.subscribers.nonce_subscriber import NonceSubscriber
 from eventy.subscribers.subscriber import Subscriber
 from tests.abstract_event_queue_base import AbstractEventQueueTestBase
 
 
 @dataclass
-class TestPayload:
+class MockPayload:
     """Test payload for SQL event queue tests."""
     message: str
     value: int = 42
@@ -34,7 +30,7 @@ class AnotherPayload:
     count: int = 0
 
 
-class TestSubscriber(Subscriber):
+class MockSubscriber(Subscriber):
     """Simple test subscriber for testing purposes."""
     async def on_event(self, event, event_queue):
         pass
@@ -97,13 +93,13 @@ class TestSqlQueueManager(unittest.IsolatedAsyncioTestCase):
         
         async with manager:
             # Register a queue
-            await manager.register(TestPayload)
-            queue = await manager.get_event_queue(TestPayload)
+            await manager.register(MockPayload)
+            queue = await manager.get_event_queue(MockPayload)
             self.assertIsInstance(queue, SqlEventQueue)
-            self.assertEqual(queue.payload_type, TestPayload)
+            self.assertEqual(queue.payload_type, MockPayload)
             
             # Get the same queue again
-            queue2 = await manager.get_event_queue(TestPayload)
+            queue2 = await manager.get_event_queue(MockPayload)
             self.assertIs(queue, queue2)
 
     async def test_deregister_queue(self):
@@ -112,16 +108,16 @@ class TestSqlQueueManager(unittest.IsolatedAsyncioTestCase):
         
         async with manager:
             # Register a queue
-            await manager.register(TestPayload)
-            queue = await manager.get_event_queue(TestPayload)
+            await manager.register(MockPayload)
+            queue = await manager.get_event_queue(MockPayload)
             self.assertIsInstance(queue, SqlEventQueue)
             
             # Deregister the queue
-            await manager.deregister(TestPayload)
+            await manager.deregister(MockPayload)
             
             # Getting the queue again should fail
             with self.assertRaises(Exception):  # Should raise EventyError
-                await manager.get_event_queue(TestPayload)
+                await manager.get_event_queue(MockPayload)
 
     async def test_reset_queue(self):
         """Test resetting queues."""
@@ -129,19 +125,19 @@ class TestSqlQueueManager(unittest.IsolatedAsyncioTestCase):
         
         async with manager:
             # Register a queue and add some data
-            await manager.register(TestPayload)
-            queue = await manager.get_event_queue(TestPayload)
+            await manager.register(MockPayload)
+            queue = await manager.get_event_queue(MockPayload)
             
             # Add a subscriber
-            subscriber = TestSubscriber()
+            subscriber = MockSubscriber()
             await queue.subscribe(subscriber)
             
             # Add an event
-            payload = TestPayload(message="test", value=123)
+            payload = MockPayload(message="test", value=123)
             await queue.publish(payload)
             
             # Reset the queue
-            await manager.reset(TestPayload)
+            await manager.reset(MockPayload)
             
             # Queue should be empty
             events_page = await queue.search_events()
@@ -153,17 +149,17 @@ class TestSqlQueueManager(unittest.IsolatedAsyncioTestCase):
         
         async with manager:
             # Register queues for different payload types
-            await manager.register(TestPayload)
+            await manager.register(MockPayload)
             await manager.register(AnotherPayload)
-            queue1 = await manager.get_event_queue(TestPayload)
+            queue1 = await manager.get_event_queue(MockPayload)
             queue2 = await manager.get_event_queue(AnotherPayload)
             
             self.assertIsNot(queue1, queue2)
-            self.assertEqual(queue1.payload_type, TestPayload)
+            self.assertEqual(queue1.payload_type, MockPayload)
             self.assertEqual(queue2.payload_type, AnotherPayload)
             
             # Add events to both queues
-            await queue1.publish(TestPayload(message="test1"))
+            await queue1.publish(MockPayload(message="test1"))
             await queue2.publish(AnotherPayload(name="test2"))
             
             # Check events are in correct queues
