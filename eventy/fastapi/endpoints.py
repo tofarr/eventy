@@ -6,7 +6,11 @@ from uuid import UUID, uuid4
 from eventy.event_queue import EventQueue
 from eventy.event_result import EventResult
 from eventy.config.eventy_config import EventyConfig
-from eventy.fastapi.websocket_subscriber import SERIALIZERS, WEBSOCKETS, WebsocketSubscriber
+from eventy.fastapi.websocket_subscriber import (
+    SERIALIZERS,
+    WEBSOCKETS,
+    WebsocketSubscriber,
+)
 from eventy.queue_manager import QueueManager
 from eventy.queue_event import QueueEvent
 
@@ -28,7 +32,9 @@ T = TypeVar("T")
 _LOGGER = logging.getLogger(__name__)
 
 
-async def add_endpoints(fastapi: FastAPI, queue_manager: QueueManager, config: EventyConfig):
+async def add_endpoints(
+    fastapi: FastAPI, queue_manager: QueueManager, config: EventyConfig
+):
     for payload_type in config.get_payload_types():
         await queue_manager.register(payload_type)
         router = APIRouter(prefix=f"/{payload_type.__name__}")
@@ -57,12 +63,14 @@ def add_queue_endpoints(
         subscriber_payload_type = get_payload_type(subscriber_type)
         if issubclass(subscriber_payload_type, payload_type):
             subscriber_types.append(subscriber_type)
-    
+
     websocket_subscriber_type = WebsocketSubscriber[payload_type]
     subscriber_types.append(websocket_subscriber_type)
-    
+
     if len(subscriber_types) > 1:
-        subscriber_type = Annotated[Union[tuple(subscriber_types)], Field(discriminator="type_name")]
+        subscriber_type = Annotated[
+            Union[tuple(subscriber_types)], Field(discriminator="type_name")
+        ]
     else:
         subscriber_type = subscriber_types[0]
 
@@ -79,7 +87,9 @@ def add_queue_endpoints(
         next_page_id: str | None
 
     payload_type_adapter = TypeAdapter(payload_type)
-    SERIALIZERS[payload_type.__name__] = PydanticSerializer(TypeAdapter(QueueEvent[payload_type]))
+    SERIALIZERS[payload_type.__name__] = PydanticSerializer(
+        TypeAdapter(QueueEvent[payload_type])
+    )
 
     @fastapi.post("/event")
     async def publish(payload: payload_type) -> EventResponse:  # type: ignore
@@ -201,7 +211,11 @@ def add_queue_endpoints(
         await websocket.accept()
         event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
         websocket_id = uuid4()
-        subscriber = WebsocketSubscriber(type_name="WebsocketSubscriber", websocket_id=websocket_id, payload_type_name=payload_type.__name__)
+        subscriber = WebsocketSubscriber(
+            type_name="WebsocketSubscriber",
+            websocket_id=websocket_id,
+            payload_type_name=payload_type.__name__,
+        )
         WEBSOCKETS[websocket_id] = websocket
         subscription = await event_queue.subscribe(subscriber)
         try:

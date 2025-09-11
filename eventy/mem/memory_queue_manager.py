@@ -42,7 +42,12 @@ class MemoryQueueManager(QueueManager):
         self._entered = False
 
         # Close all queues
-        await asyncio.gather(*[queue.__aexit__(exc_type, exc_value, traceback) for queue in self._queues.values()])
+        await asyncio.gather(
+            *[
+                queue.__aexit__(exc_type, exc_value, traceback)
+                for queue in self._queues.values()
+            ]
+        )
 
         self._queues.clear()
 

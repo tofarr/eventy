@@ -109,7 +109,7 @@ class EventQueue(Generic[T], ABC):
     @abstractmethod
     async def publish(self, payload: T) -> QueueEvent[T]:
         """Publish an event to this queue
-        
+
         When an event is published, it will be delivered to all subscribers.
         For each subscriber that receives the event, an EventResult will be
         created and stored to track whether the subscriber successfully
