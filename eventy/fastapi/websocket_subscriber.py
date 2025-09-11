@@ -1,9 +1,9 @@
 import json
-from fastapi import WebSocketDisconnect
-from fastapi.websockets import WebSocket, WebSocketState
 from typing import Literal, TypeVar
 from uuid import UUID
 
+from fastapi import WebSocketDisconnect
+from fastapi.websockets import WebSocket, WebSocketState
 from pydantic import BaseModel
 from eventy.event_queue import EventQueue
 from eventy.eventy_error import SkipException

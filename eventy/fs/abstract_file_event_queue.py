@@ -643,9 +643,9 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
     @abstractmethod
     async def __aenter__(self):
         """Start this event queue - must be implemented by subclasses"""
-        pass
+        pass  # pylint: disable=unnecessary-pass
 
     @abstractmethod
     async def __aexit__(self, exc_type, exc_value, traceback):
         """Close this event queue - must be implemented by subclasses"""
-        pass
+        pass  # pylint: disable=unnecessary-pass

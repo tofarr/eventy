@@ -86,7 +86,7 @@ class SqlQueueManager(QueueManager):
         # Start all existing queues
         await asyncio.gather(*[queue.__aenter__() for queue in self._queues.values()])
 
-        _LOGGER.info(f"Started SqlQueueManager")
+        _LOGGER.info("Started SqlQueueManager")
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
@@ -107,7 +107,7 @@ class SqlQueueManager(QueueManager):
         if self._engine:
             self._engine.dispose()
 
-        _LOGGER.info(f"Stopped SqlQueueManager")
+        _LOGGER.info("Stopped SqlQueueManager")
 
     def _create_queue(self, payload_type: type[T]) -> EventQueue[T]:
         """Create a new SQL event queue instance"""
@@ -148,7 +148,7 @@ class SqlQueueManager(QueueManager):
         queue = self._create_queue(payload_type)
 
         if self._entered:
-            await queue.__aenter__()
+            await queue.__aenter__()  # pylint: disable=unnecessary-dunder-call
 
         self._queues[payload_type] = queue
         _LOGGER.info(f"Registered queue for payload type: {payload_type}")
@@ -230,8 +230,8 @@ class SqlQueueManager(QueueManager):
                 # Clear the subscription cache for the queue
                 queue = self._queues[payload_type]
                 if hasattr(queue, "_subscription_cache"):
-                    queue._subscription_cache.clear()
-                    queue._subscription_cache_dirty = True
+                    queue._subscription_cache.clear()  # pylint: disable=protected-access
+                    queue._subscription_cache_dirty = True  # pylint: disable=protected-access
 
             except Exception as e:
                 session.rollback()

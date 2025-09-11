@@ -154,7 +154,7 @@ class FileQueueManager(QueueManager):
         queue = self._create_queue(payload_type)
 
         if self._entered:
-            await queue.__aenter__()
+            await queue.__aenter__()  # pylint: disable=unnecessary-dunder-call
 
         self._queues[payload_type] = queue
         _LOGGER.info(f"Registered queue for payload type: {payload_type}")

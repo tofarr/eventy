@@ -14,7 +14,7 @@ T = TypeVar("T")
 _LOGGER = logging.getLogger(__name__)
 
 
-class EventQueue(Generic[T], ABC):
+class EventQueue(Generic[T], ABC):  # pylint: disable=too-many-public-methods
     """Event queue for distributed processin. Within the context of an event queue
     results are only ever added - never updated or deleted"""
 

@@ -16,7 +16,7 @@ except ImportError as e:
     ) from e
 
 
-class GUID(TypeDecorator):
+class GUID(TypeDecorator):  # pylint: disable=too-many-ancestors,abstract-method
     """Platform-independent GUID type.
 
     Uses PostgreSQL's UUID type when available, otherwise uses CHAR(36).
@@ -61,7 +61,7 @@ class SqlEvent(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     payload_type = Column(String(255), nullable=False, index=True)
     payload_data = Column(LargeBinary, nullable=False)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
+    created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())  # pylint: disable=not-callable
 
     def __repr__(self):
         return f"<SqlEvent(id={self.id}, payload_type='{self.payload_type}')>"
@@ -77,7 +77,7 @@ class SqlEventResult(Base):
     event_id = Column(Integer, nullable=False, index=True)
     success = Column(Boolean, nullable=False)
     details = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
+    created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())  # pylint: disable=not-callable
 
     def __repr__(self):
         return f"<SqlEventResult(id={self.id}, event_id={self.event_id}, success={self.success})>"
@@ -91,7 +91,7 @@ class SqlSubscriber(Base):
     id = Column(GUID(), primary_key=True)
     payload_type = Column(String(255), nullable=False, index=True)
     subscriber_data = Column(LargeBinary, nullable=False)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
+    created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())  # pylint: disable=not-callable
 
     def __repr__(self):
         return f"<SqlSubscriber(id={self.id}, payload_type='{self.payload_type}')>"
@@ -106,7 +106,7 @@ class SqlClaim(Base):
     worker_id = Column(GUID(), nullable=False, index=True)
     payload_type = Column(String(255), nullable=False, index=True)
     data = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())
+    created_at = Column(DateTime(timezone=True), nullable=False, default=func.now())  # pylint: disable=not-callable
 
     def __repr__(self):
         return f"<SqlClaim(id='{self.id}', worker_id={self.worker_id})>"

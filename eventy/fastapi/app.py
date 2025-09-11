@@ -15,24 +15,24 @@ from eventy.queue_manager import get_default_queue_manager
 
 
 # Global queue manager instance
-queue_manager = None
+_queue_manager = None  # pylint: disable=invalid-name
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(fastapi_app: FastAPI):
     """
     Manage the application lifecycle.
 
     This context manager handles the startup and shutdown of the queue manager,
     ensuring proper resource management.
     """
-    global queue_manager
+    global _queue_manager
 
     # Startup: Initialize and enter the queue manager
-    queue_manager = await get_default_queue_manager()
-    async with queue_manager:
+    _queue_manager = await get_default_queue_manager()
+    async with _queue_manager:
         config = get_config()
-        await add_endpoints(app, queue_manager, config)
+        await add_endpoints(fastapi_app, _queue_manager, config)
         yield
 
 
@@ -53,4 +53,4 @@ async def health_check():
     Returns:
         dict: Application health status
     """
-    return {"status": "healthy", "queue_manager_active": queue_manager is not None}
+    return {"status": "healthy", "queue_manager_active": _queue_manager is not None}

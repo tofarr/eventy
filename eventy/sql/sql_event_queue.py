@@ -188,7 +188,7 @@ class SqlEventQueue(EventQueue[T]):
                 except Exception as e:
                     _LOGGER.warning(f"Failed to deserialize event {sql_event.id}: {e}")
 
-    async def search_events(
+    async def search_events(  # pylint: disable=too-many-locals
         self,
         page_id: Optional[str] = None,
         limit: int = 100,
@@ -427,7 +427,7 @@ class SqlEventQueue(EventQueue[T]):
                     created_at=sql_result.created_at,
                 )
 
-    async def search_results(
+    async def search_results(  # pylint: disable=too-many-locals
         self,
         page_id: Optional[str] = None,
         limit: int = 100,
@@ -503,7 +503,7 @@ class SqlEventQueue(EventQueue[T]):
         self._check_running()
 
         async with self.session_factory()() as session:
-            query = select(func.count(SqlEventResult.id))
+            query = select(func.count(SqlEventResult.id))  # pylint: disable=not-callable
 
             conditions = []
             if event_id__eq is not None:
@@ -585,7 +585,7 @@ class SqlEventQueue(EventQueue[T]):
                 data=sql_claim.data,
             )
 
-    async def search_claims(
+    async def search_claims(  # pylint: disable=too-many-locals
         self,
         page_id: Optional[str] = None,
         limit: int = 100,
@@ -655,7 +655,7 @@ class SqlEventQueue(EventQueue[T]):
     ) -> int:
         """Count claims matching the given criteria."""
         async with self.session_factory()() as session:
-            query = select(func.count(SqlClaim.id))
+            query = select(func.count(SqlClaim.id))  # pylint: disable=not-callable
 
             conditions = []
             if worker_id__eq is not None:

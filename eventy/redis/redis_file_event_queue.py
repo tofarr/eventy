@@ -8,10 +8,10 @@ from uuid import UUID, uuid4
 
 try:
     import redis.asyncio as redis
-except ImportError:
+except ImportError as exc:
     raise ImportError(
         "Redis is required for RedisFileEventQueue. Install with: pip install 'eventy[redis]'"
-    )
+    ) from exc
 
 from eventy.claim import Claim
 from eventy.event_result import EventResult
@@ -65,6 +65,11 @@ class RedisFileEventQueue(AbstractFileEventQueue[T]):
     def __post_init__(self):
         """Initialize Redis connection and call parent post_init"""
         super().__post_init__()
+        # Initialize Redis-specific fields
+        self._redis = None
+        self._pubsub = None
+        self._pubsub_task = None
+        self._stop_pubsub = False
 
     async def __aenter__(self):
         """Start the Redis file event queue"""

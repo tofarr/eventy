@@ -56,19 +56,19 @@ class SubscriptionFileHandler(FileSystemEventHandler):
         """Handle subscription file creation"""
         if not event.is_directory:
             _LOGGER.debug(f"Subscription file created: {event.src_path}")
-            self.queue._mark_subscription_cache_dirty()
+            self.queue._mark_subscription_cache_dirty()  # pylint: disable=protected-access
 
     def on_deleted(self, event):
         """Handle subscription file deletion"""
         if not event.is_directory:
             _LOGGER.debug(f"Subscription file deleted: {event.src_path}")
-            self.queue._mark_subscription_cache_dirty()
+            self.queue._mark_subscription_cache_dirty()  # pylint: disable=protected-access
 
     def on_modified(self, event):
         """Handle subscription file modification"""
         if not event.is_directory:
             _LOGGER.debug(f"Subscription file modified: {event.src_path}")
-            self.queue._mark_subscription_cache_dirty()
+            self.queue._mark_subscription_cache_dirty()  # pylint: disable=protected-access
 
 
 @dataclass
