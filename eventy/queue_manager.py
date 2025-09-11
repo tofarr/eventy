@@ -73,9 +73,10 @@ async def get_default_queue_manager() -> QueueManager:
             redis_url = os.getenv(EVENTY_REDIS_URL)
             database_url = os.getenv(EVENTY_DATABASE_URL)
             root_dir = Path(os.getenv(EVENTY_ROOT_DIR, DEFAULT_ROOT_DIR))
-            
+
             if redis_url:
                 from eventy.redis.redis_queue_manager import RedisQueueManager
+
                 _default_queue_manager = RedisQueueManager(
                     root_dir=root_dir,
                     redis_url=redis_url,
@@ -84,16 +85,21 @@ async def get_default_queue_manager() -> QueueManager:
             elif database_url:
                 try:
                     from eventy.sql.sql_queue_manager import SqlQueueManager
+
                     _default_queue_manager = SqlQueueManager()
                 except ImportError:
-                    _LOGGER.warning("SQLAlchemy not available, falling back to file-based queue manager")
+                    _LOGGER.warning(
+                        "SQLAlchemy not available, falling back to file-based queue manager"
+                    )
                     from eventy.fs.file_queue_manager import FileQueueManager
+
                     _default_queue_manager = FileQueueManager(root_dir=root_dir)
             else:
                 from eventy.fs.file_queue_manager import FileQueueManager
+
                 _default_queue_manager = FileQueueManager(root_dir=root_dir)
-        
-        _LOGGER.info('Using Queue Manager: {manager_class.__name__}')
+
+        _LOGGER.info("Using Queue Manager: {manager_class.__name__}")
 
         try:
             config = get_config()

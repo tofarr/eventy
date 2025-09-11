@@ -8,7 +8,11 @@ from uuid import UUID, uuid4
 
 try:
     from sqlalchemy import select, delete, and_, or_, func
-    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+    from sqlalchemy.ext.asyncio import (
+        create_async_engine,
+        AsyncSession,
+        async_sessionmaker,
+    )
     from sqlalchemy.exc import IntegrityError
     from sqlalchemy.engine import Engine
 except ImportError as e:
@@ -35,10 +39,10 @@ _LOGGER = logging.getLogger(__name__)
 class SqlEventQueue(EventQueue[T]):
     """
     SQL-based event queue implementation using SQLAlchemy.
-    
+
     This class provides a database-backed storage system where:
     - Events are stored in the eventy_events table
-    - Results are stored in the eventy_results table  
+    - Results are stored in the eventy_results table
     - Subscribers are stored in the eventy_subscribers table
     - Claims are stored in the eventy_claims table
     - Each type of data uses its own serializer for storage
@@ -96,10 +100,10 @@ class SqlEventQueue(EventQueue[T]):
         # Create tables if they don't exist
         async with self._engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-        
+
         # Initialize subscription cache
         await self._load_subscription_cache()
-        
+
         self.running = True
         _LOGGER.info(f"Started SqlEventQueue for {self.payload_type}")
         return self
@@ -127,25 +131,23 @@ class SqlEventQueue(EventQueue[T]):
             # Create event with auto-incrementing ID
             sql_event = SqlEvent(
                 payload_type=self._get_payload_type_name(),
-                payload_data=b''  # Temporary, will be updated after getting ID
+                payload_data=b"",  # Temporary, will be updated after getting ID
             )
-            
+
             session.add(sql_event)
             await session.commit()
             await session.refresh(sql_event)
-            
+
             # Create the QueueEvent with the actual database ID
             event = QueueEvent(
-                id=sql_event.id,
-                payload=payload,
-                created_at=sql_event.created_at
+                id=sql_event.id, payload=payload, created_at=sql_event.created_at
             )
-            
+
             # Update the stored event data with the correct ID
             event_data = self.event_serializer.serialize(event)
             sql_event.payload_data = event_data
             await session.commit()
-            
+
             _LOGGER.info(f"Published event {event.id}")
             return event
 
@@ -167,15 +169,17 @@ class SqlEventQueue(EventQueue[T]):
     ) -> AsyncIterator[QueueEvent[T]]:
         """Iterate over events matching the given criteria"""
         async with self.session_factory()() as session:
-            query = select(SqlEvent).where(
-                SqlEvent.payload_type == self._get_payload_type_name()
-            ).order_by(SqlEvent.id)
-            
+            query = (
+                select(SqlEvent)
+                .where(SqlEvent.payload_type == self._get_payload_type_name())
+                .order_by(SqlEvent.id)
+            )
+
             if created_at__gte is not None:
                 query = query.where(SqlEvent.created_at >= created_at__gte)
             if created_at__lte is not None:
                 query = query.where(SqlEvent.created_at <= created_at__lte)
-            
+
             result = await session.execute(query)
             for sql_event in result.scalars():
                 try:
@@ -195,27 +199,31 @@ class SqlEventQueue(EventQueue[T]):
         self._check_running()
 
         async with self.session_factory()() as session:
-            query = select(SqlEvent).where(
-                SqlEvent.payload_type == self._get_payload_type_name()
-            ).order_by(SqlEvent.id)
-            
+            query = (
+                select(SqlEvent)
+                .where(SqlEvent.payload_type == self._get_payload_type_name())
+                .order_by(SqlEvent.id)
+            )
+
             if created_at__gte is not None:
                 query = query.where(SqlEvent.created_at >= created_at__gte)
             if created_at__lte is not None:
                 query = query.where(SqlEvent.created_at <= created_at__lte)
-            
+
             # Handle pagination
             offset = int(page_id) if page_id is not None else 0
-            query = query.offset(offset).limit(limit + 1)  # Get one extra to check for next page
-            
+            query = query.offset(offset).limit(
+                limit + 1
+            )  # Get one extra to check for next page
+
             result = await session.execute(query)
             sql_events = list(result.scalars())
-            
+
             # Check if there's a next page
             has_next_page = len(sql_events) > limit
             if has_next_page:
                 sql_events = sql_events[:limit]
-            
+
             # Convert to QueueEvent objects
             events = []
             for sql_event in sql_events:
@@ -224,7 +232,7 @@ class SqlEventQueue(EventQueue[T]):
                     events.append(event)
                 except Exception as e:
                     _LOGGER.warning(f"Failed to deserialize event {sql_event.id}: {e}")
-            
+
             # Determine next page ID
             next_page_id = None
             if has_next_page:
@@ -256,13 +264,13 @@ class SqlEventQueue(EventQueue[T]):
 
         async with self.session_factory()() as session:
             subscriber_data = self.subscriber_serializer.serialize(subscriber)
-            
+
             sql_subscriber = SqlSubscriber(
                 id=subscriber_id,
                 payload_type=self._get_payload_type_name(),
-                subscriber_data=subscriber_data
+                subscriber_data=subscriber_data,
             )
-            
+
             session.add(sql_subscriber)
             await session.commit()
 
@@ -281,12 +289,12 @@ class SqlEventQueue(EventQueue[T]):
                 delete(SqlSubscriber).where(
                     and_(
                         SqlSubscriber.id == subscriber_id,
-                        SqlSubscriber.payload_type == self._get_payload_type_name()
+                        SqlSubscriber.payload_type == self._get_payload_type_name(),
                     )
                 )
             )
             await session.commit()
-            
+
             if result.rowcount > 0:
                 # Remove from cache
                 self._remove_subscription_from_cache(subscriber_id)
@@ -303,16 +311,18 @@ class SqlEventQueue(EventQueue[T]):
                 select(SqlSubscriber).where(
                     and_(
                         SqlSubscriber.id == subscriber_id,
-                        SqlSubscriber.payload_type == self._get_payload_type_name()
+                        SqlSubscriber.payload_type == self._get_payload_type_name(),
                     )
                 )
             )
             sql_subscriber = result.scalar_one_or_none()
-            
+
             if not sql_subscriber:
                 raise KeyError(f"Subscriber {subscriber_id} not found")
 
-            return self.subscriber_serializer.deserialize(sql_subscriber.subscriber_data)
+            return self.subscriber_serializer.deserialize(
+                sql_subscriber.subscriber_data
+            )
 
     async def _iter_subscriptions(self) -> AsyncIterator[Subscription[T]]:
         """Iterate over all subscriptions"""
@@ -322,13 +332,17 @@ class SqlEventQueue(EventQueue[T]):
                     SqlSubscriber.payload_type == self._get_payload_type_name()
                 )
             )
-            
+
             for sql_subscriber in result.scalars():
                 try:
-                    subscriber = self.subscriber_serializer.deserialize(sql_subscriber.subscriber_data)
+                    subscriber = self.subscriber_serializer.deserialize(
+                        sql_subscriber.subscriber_data
+                    )
                     yield Subscription(id=sql_subscriber.id, subscriber=subscriber)
                 except Exception as e:
-                    _LOGGER.warning(f"Failed to deserialize subscriber {sql_subscriber.id}: {e}")
+                    _LOGGER.warning(
+                        f"Failed to deserialize subscriber {sql_subscriber.id}: {e}"
+                    )
 
     async def search_subscriptions(
         self, page_id: Optional[str] = None, limit: int = 100
@@ -373,7 +387,7 @@ class SqlEventQueue(EventQueue[T]):
                 event_id=sql_result.event_id,
                 success=sql_result.success,
                 details=sql_result.details,
-                created_at=sql_result.created_at
+                created_at=sql_result.created_at,
             )
 
     async def _iter_results(
@@ -386,7 +400,7 @@ class SqlEventQueue(EventQueue[T]):
         """Iterate over results matching the given criteria"""
         async with self.session_factory()() as session:
             query = select(SqlEventResult)
-            
+
             conditions = []
             if event_id__eq is not None:
                 conditions.append(SqlEventResult.event_id == event_id__eq)
@@ -396,12 +410,12 @@ class SqlEventQueue(EventQueue[T]):
                 conditions.append(SqlEventResult.created_at >= created_at__gte)
             if created_at__lte is not None:
                 conditions.append(SqlEventResult.created_at <= created_at__lte)
-            
+
             if conditions:
                 query = query.where(and_(*conditions))
-            
+
             query = query.order_by(SqlEventResult.created_at)
-            
+
             result = await session.execute(query)
             for sql_result in result.scalars():
                 yield EventResult(
@@ -410,7 +424,7 @@ class SqlEventQueue(EventQueue[T]):
                     event_id=sql_result.event_id,
                     success=sql_result.success,
                     details=sql_result.details,
-                    created_at=sql_result.created_at
+                    created_at=sql_result.created_at,
                 )
 
     async def search_results(
@@ -427,7 +441,7 @@ class SqlEventQueue(EventQueue[T]):
 
         async with self.session_factory()() as session:
             query = select(SqlEventResult)
-            
+
             conditions = []
             if event_id__eq is not None:
                 conditions.append(SqlEventResult.event_id == event_id__eq)
@@ -437,36 +451,40 @@ class SqlEventQueue(EventQueue[T]):
                 conditions.append(SqlEventResult.created_at >= created_at__gte)
             if created_at__lte is not None:
                 conditions.append(SqlEventResult.created_at <= created_at__lte)
-            
+
             if conditions:
                 query = query.where(and_(*conditions))
-            
+
             query = query.order_by(SqlEventResult.created_at)
-            
+
             # Handle pagination
             offset = int(page_id) if page_id is not None else 0
-            query = query.offset(offset).limit(limit + 1)  # Get one extra to check for next page
-            
+            query = query.offset(offset).limit(
+                limit + 1
+            )  # Get one extra to check for next page
+
             result = await session.execute(query)
             sql_results = list(result.scalars())
-            
+
             # Check if there's a next page
             has_next_page = len(sql_results) > limit
             if has_next_page:
                 sql_results = sql_results[:limit]
-            
+
             # Convert to EventResult objects
             results = []
             for sql_result in sql_results:
-                results.append(EventResult(
-                    id=sql_result.id,
-                    worker_id=sql_result.worker_id,
-                    event_id=sql_result.event_id,
-                    success=sql_result.success,
-                    details=sql_result.details,
-                    created_at=sql_result.created_at
-                ))
-            
+                results.append(
+                    EventResult(
+                        id=sql_result.id,
+                        worker_id=sql_result.worker_id,
+                        event_id=sql_result.event_id,
+                        success=sql_result.success,
+                        details=sql_result.details,
+                        created_at=sql_result.created_at,
+                    )
+                )
+
             # Determine next page ID
             next_page_id = None
             if has_next_page:
@@ -486,7 +504,7 @@ class SqlEventQueue(EventQueue[T]):
 
         async with self.session_factory()() as session:
             query = select(func.count(SqlEventResult.id))
-            
+
             conditions = []
             if event_id__eq is not None:
                 conditions.append(SqlEventResult.event_id == event_id__eq)
@@ -496,10 +514,10 @@ class SqlEventQueue(EventQueue[T]):
                 conditions.append(SqlEventResult.created_at >= created_at__gte)
             if created_at__lte is not None:
                 conditions.append(SqlEventResult.created_at <= created_at__lte)
-            
+
             if conditions:
                 query = query.where(and_(*conditions))
-            
+
             result = await session.execute(query)
             return result.scalar()
 
@@ -512,9 +530,9 @@ class SqlEventQueue(EventQueue[T]):
                 event_id=result.event_id,
                 success=result.success,
                 details=result.details,
-                created_at=result.created_at
+                created_at=result.created_at,
             )
-            
+
             session.add(sql_result)
             await session.commit()
 
@@ -530,12 +548,12 @@ class SqlEventQueue(EventQueue[T]):
                     id=claim_id,
                     worker_id=self.worker_id,
                     payload_type=self._get_payload_type_name(),
-                    data=data
+                    data=data,
                 )
-                
+
                 session.add(sql_claim)
                 await session.commit()
-                
+
                 _LOGGER.info(f"Created claim {claim_id}")
                 return True
             except IntegrityError:
@@ -551,12 +569,12 @@ class SqlEventQueue(EventQueue[T]):
                 select(SqlClaim).where(
                     and_(
                         SqlClaim.id == claim_id,
-                        SqlClaim.payload_type == self._get_payload_type_name()
+                        SqlClaim.payload_type == self._get_payload_type_name(),
                     )
                 )
             )
             sql_claim = result.scalar_one_or_none()
-            
+
             if not sql_claim:
                 raise EventyError(f"Claim {claim_id} not found")
 
@@ -564,7 +582,7 @@ class SqlEventQueue(EventQueue[T]):
                 id=sql_claim.id,
                 worker_id=sql_claim.worker_id,
                 created_at=sql_claim.created_at,
-                data=sql_claim.data
+                data=sql_claim.data,
             )
 
     async def search_claims(
@@ -582,7 +600,7 @@ class SqlEventQueue(EventQueue[T]):
             query = select(SqlClaim).where(
                 SqlClaim.payload_type == self._get_payload_type_name()
             )
-            
+
             conditions = []
             if worker_id__eq is not None:
                 conditions.append(SqlClaim.worker_id == worker_id__eq)
@@ -590,34 +608,38 @@ class SqlEventQueue(EventQueue[T]):
                 conditions.append(SqlClaim.created_at >= created_at__gte)
             if created_at__lte is not None:
                 conditions.append(SqlClaim.created_at <= created_at__lte)
-            
+
             if conditions:
                 query = query.where(and_(*conditions))
-            
+
             query = query.order_by(SqlClaim.created_at)
-            
+
             # Handle pagination
             offset = int(page_id) if page_id is not None else 0
-            query = query.offset(offset).limit(limit + 1)  # Get one extra to check for next page
-            
+            query = query.offset(offset).limit(
+                limit + 1
+            )  # Get one extra to check for next page
+
             result = await session.execute(query)
             sql_claims = list(result.scalars())
-            
+
             # Check if there's a next page
             has_next_page = len(sql_claims) > limit
             if has_next_page:
                 sql_claims = sql_claims[:limit]
-            
+
             # Convert to Claim objects
             claims = []
             for sql_claim in sql_claims:
-                claims.append(Claim(
-                    id=sql_claim.id,
-                    worker_id=sql_claim.worker_id,
-                    created_at=sql_claim.created_at,
-                    data=sql_claim.data
-                ))
-            
+                claims.append(
+                    Claim(
+                        id=sql_claim.id,
+                        worker_id=sql_claim.worker_id,
+                        created_at=sql_claim.created_at,
+                        data=sql_claim.data,
+                    )
+                )
+
             # Determine next page ID
             next_page_id = None
             if has_next_page:
@@ -634,7 +656,7 @@ class SqlEventQueue(EventQueue[T]):
         """Count claims matching the given criteria."""
         async with self.session_factory()() as session:
             query = select(func.count(SqlClaim.id))
-            
+
             conditions = []
             if worker_id__eq is not None:
                 conditions.append(SqlClaim.worker_id == worker_id__eq)
@@ -642,10 +664,10 @@ class SqlEventQueue(EventQueue[T]):
                 conditions.append(SqlClaim.created_at >= created_at__gte)
             if created_at__lte is not None:
                 conditions.append(SqlClaim.created_at <= created_at__lte)
-            
+
             if conditions:
                 query = query.where(and_(*conditions))
-            
+
             result = await session.execute(query)
             return result.scalar() or 0
 
@@ -654,22 +676,28 @@ class SqlEventQueue(EventQueue[T]):
         self._subscription_cache = {}
         if not self.running:
             return
-            
+
         async with self.session_factory()() as session:
             result = await session.execute(
                 select(SqlSubscriber).where(
                     SqlSubscriber.payload_type == self._get_payload_type_name()
                 )
             )
-            
+
             for sql_subscriber in result.scalars():
                 try:
-                    subscriber = self.subscriber_serializer.deserialize(sql_subscriber.subscriber_data)
-                    subscription = Subscription(id=sql_subscriber.id, subscriber=subscriber)
+                    subscriber = self.subscriber_serializer.deserialize(
+                        sql_subscriber.subscriber_data
+                    )
+                    subscription = Subscription(
+                        id=sql_subscriber.id, subscriber=subscriber
+                    )
                     self._subscription_cache[sql_subscriber.id] = subscription
                 except Exception as e:
-                    _LOGGER.warning(f"Failed to load subscriber {sql_subscriber.id}: {e}")
-        
+                    _LOGGER.warning(
+                        f"Failed to load subscriber {sql_subscriber.id}: {e}"
+                    )
+
         self._subscription_cache_dirty = False
 
     async def _get_cached_subscriptions(self) -> list[Subscription[T]]:

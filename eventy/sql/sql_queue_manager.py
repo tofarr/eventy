@@ -15,7 +15,12 @@ except ImportError as e:
         "SQLAlchemy is required for SQL queue manager. Install with: pip install eventy[sql]"
     ) from e
 
-from eventy.constants import EVENTY_DATABASE_URL, DEFAULT_DATABASE_URL, EVENTY_SQL_CREATE_TABLES, DEFAULT_SQL_CREATE_TABLES
+from eventy.constants import (
+    EVENTY_DATABASE_URL,
+    DEFAULT_DATABASE_URL,
+    EVENTY_SQL_CREATE_TABLES,
+    DEFAULT_SQL_CREATE_TABLES,
+)
 from eventy.event_queue import EventQueue
 from eventy.eventy_error import EventyError
 from eventy.queue_manager import QueueManager
@@ -31,14 +36,21 @@ _LOGGER = logging.getLogger(__name__)
 class SqlQueueManager(QueueManager):
     """
     SQL-based implementation of QueueManager using SQLAlchemy.
-    
+
     This manager creates and manages SQL-based event queues that store
     events, results, subscribers, and claims in database tables.
     """
 
-    database_url: str = field(default_factory=lambda: os.getenv(EVENTY_DATABASE_URL, DEFAULT_DATABASE_URL))
+    database_url: str = field(
+        default_factory=lambda: os.getenv(EVENTY_DATABASE_URL, DEFAULT_DATABASE_URL)
+    )
     serializer: Serializer = field(default_factory=get_default_serializer)
-    create_tables: bool = field(default_factory=lambda: os.getenv(EVENTY_SQL_CREATE_TABLES, DEFAULT_SQL_CREATE_TABLES).lower() == 'true')
+    create_tables: bool = field(
+        default_factory=lambda: os.getenv(
+            EVENTY_SQL_CREATE_TABLES, DEFAULT_SQL_CREATE_TABLES
+        ).lower()
+        == "true"
+    )
 
     # Internal storage
     _queues: Dict[type, EventQueue] = field(default_factory=dict, init=False)
@@ -49,10 +61,10 @@ class SqlQueueManager(QueueManager):
     def __post_init__(self):
         """Initialize the database connection"""
         # Convert async database URL to sync for the manager
-        sync_url = self.database_url.replace('+aiosqlite', '')
+        sync_url = self.database_url.replace("+aiosqlite", "")
         self._engine = create_engine(sync_url)
         self._session_factory = sessionmaker(bind=self._engine)
-        
+
         _LOGGER.info(f"Initialized SqlQueueManager with database: {sync_url}")
 
     def _check_entered(self) -> None:
@@ -90,11 +102,11 @@ class SqlQueueManager(QueueManager):
         )
 
         self._queues.clear()
-        
+
         # Close database connection
         if self._engine:
             self._engine.dispose()
-            
+
         _LOGGER.info(f"Stopped SqlQueueManager")
 
     def _create_queue(self, payload_type: type[T]) -> EventQueue[T]:
@@ -165,55 +177,65 @@ class SqlQueueManager(QueueManager):
     async def reset(self, payload_type: type[T]):
         """Clear all Events, Results and claims for a specific payload type"""
         self._check_entered()
-        
+
         if payload_type not in self._queues:
             _LOGGER.warning(f"No queue found for payload type: {payload_type}")
             return
-            
+
         # Get the payload type name for filtering
         payload_type_name = f"{payload_type.__module__}.{payload_type.__name__}"
-        
+
         with self._session_factory() as session:
             try:
                 # Delete claims for this payload type
                 session.execute(
-                    text("DELETE FROM eventy_claims WHERE payload_type = :payload_type"),
-                    {"payload_type": payload_type_name}
+                    text(
+                        "DELETE FROM eventy_claims WHERE payload_type = :payload_type"
+                    ),
+                    {"payload_type": payload_type_name},
                 )
-                
+
                 # Delete subscribers for this payload type
                 session.execute(
-                    text("DELETE FROM eventy_subscribers WHERE payload_type = :payload_type"),
-                    {"payload_type": payload_type_name}
+                    text(
+                        "DELETE FROM eventy_subscribers WHERE payload_type = :payload_type"
+                    ),
+                    {"payload_type": payload_type_name},
                 )
-                
+
                 # Delete results for events of this payload type
                 session.execute(
-                    text("""
+                    text(
+                        """
                         DELETE FROM eventy_results 
                         WHERE event_id IN (
                             SELECT id FROM eventy_events WHERE payload_type = :payload_type
                         )
-                    """),
-                    {"payload_type": payload_type_name}
+                    """
+                    ),
+                    {"payload_type": payload_type_name},
                 )
-                
+
                 # Delete events for this payload type
                 session.execute(
-                    text("DELETE FROM eventy_events WHERE payload_type = :payload_type"),
-                    {"payload_type": payload_type_name}
+                    text(
+                        "DELETE FROM eventy_events WHERE payload_type = :payload_type"
+                    ),
+                    {"payload_type": payload_type_name},
                 )
-                
+
                 session.commit()
                 _LOGGER.info(f"Reset all data for payload type: {payload_type}")
-                
+
                 # Clear the subscription cache for the queue
                 queue = self._queues[payload_type]
-                if hasattr(queue, '_subscription_cache'):
+                if hasattr(queue, "_subscription_cache"):
                     queue._subscription_cache.clear()
                     queue._subscription_cache_dirty = True
-                    
+
             except Exception as e:
                 session.rollback()
-                _LOGGER.error(f"Error resetting data for {payload_type}: {e}", exc_info=True)
+                _LOGGER.error(
+                    f"Error resetting data for {payload_type}: {e}", exc_info=True
+                )
                 raise

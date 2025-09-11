@@ -11,10 +11,10 @@ try:
         show_current_revision,
         show_migration_history,
     )
-    
+
     __all__ = [
         "SqlEventQueue",
-        "SqlQueueManager", 
+        "SqlQueueManager",
         "Base",
         "SqlEvent",
         "SqlEventResult",
