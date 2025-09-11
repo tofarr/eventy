@@ -15,13 +15,20 @@ dependencies = [
     "websockets (>=15.0.1,<16.0.0)"
 ]
 
+[project.optional-dependencies]
+server = [
+    "fastapi>=0.100.0", 
+    "uvicorn>=0.20.0", 
+    "pydantic>=2.11.7,<3.0.0"
+]
+redis = [
+    "redis>=4.0.0"
+]
+
 [tool.poetry]
 packages = [{include = "eventy"}]
 
-[tool.poetry.extras]
-server = [
-    "fastapi", "uvicorn", "pydantic"
-]
+
 
 [tool.poetry.group.dev.dependencies]
 black = "^25.1.0"
