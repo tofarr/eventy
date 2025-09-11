@@ -11,6 +11,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 try:
+    from eventy.constants import EVENTY_DATABASE_URL, EVENTY_QUEUE_MANAGER
     from eventy.sql import SqlEventQueue, SqlQueueManager
     from eventy.subscribers.nonce_subscriber import NonceSubscriber
     from eventy.subscribers.subscriber import Subscriber
@@ -224,8 +225,8 @@ async def demonstrate_environment_integration():
     logger.info("\n=== Environment Integration Demo ===")
     
     # Set environment variables
-    os.environ["EVENTY_DATABASE_URL"] = "sqlite+aiosqlite:///./example_eventy.db"
-    os.environ["EVENTY_QUEUE_MANAGER"] = "eventy.sql.sql_queue_manager.SqlQueueManager"
+    os.environ[EVENTY_DATABASE_URL] = "sqlite+aiosqlite:///./example_eventy.db"
+    os.environ[EVENTY_QUEUE_MANAGER] = "eventy.sql.sql_queue_manager.SqlQueueManager"
     
     # Import after setting environment variables
     from eventy.queue_manager import get_default_queue_manager

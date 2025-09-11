@@ -15,6 +15,7 @@ except ImportError as e:
         "SQLAlchemy is required for SQL queue manager. Install with: pip install eventy[sql]"
     ) from e
 
+from eventy.constants import EVENTY_DATABASE_URL, DEFAULT_DATABASE_URL, EVENTY_SQL_CREATE_TABLES, DEFAULT_SQL_CREATE_TABLES
 from eventy.event_queue import EventQueue
 from eventy.eventy_error import EventyError
 from eventy.queue_manager import QueueManager
@@ -35,9 +36,9 @@ class SqlQueueManager(QueueManager):
     events, results, subscribers, and claims in database tables.
     """
 
-    database_url: str = field(default_factory=lambda: os.getenv('EVENTY_DATABASE_URL', 'sqlite:///./eventy.db'))
+    database_url: str = field(default_factory=lambda: os.getenv(EVENTY_DATABASE_URL, DEFAULT_DATABASE_URL))
     serializer: Serializer = field(default_factory=get_default_serializer)
-    create_tables: bool = field(default_factory=lambda: os.getenv('EVENTY_SQL_CREATE_TABLES', 'true').lower() == 'true')
+    create_tables: bool = field(default_factory=lambda: os.getenv(EVENTY_SQL_CREATE_TABLES, DEFAULT_SQL_CREATE_TABLES).lower() == 'true')
 
     # Internal storage
     _queues: Dict[type, EventQueue] = field(default_factory=dict, init=False)

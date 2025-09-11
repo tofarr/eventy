@@ -182,19 +182,34 @@ manager = SqlQueueManager(
 
 ### Environment Variables
 
-- `EVENTY_DATABASE_URL` - Database connection URL
+The SQL implementation supports the following environment variables (defined in `eventy.constants`):
+
+- `EVENTY_DATABASE_URL` - Database connection URL (default: `sqlite:///./eventy.db`)
 - `EVENTY_SQL_CREATE_TABLES` - Set to "false" to disable automatic table creation (default: "true")
 - `EVENTY_QUEUE_MANAGER` - Set to `eventy.sql.SqlQueueManager` to use SQL as default
+
+These constants should be imported from `eventy.constants` for consistency:
+
+```python
+from eventy.constants import EVENTY_DATABASE_URL, EVENTY_SQL_CREATE_TABLES, EVENTY_QUEUE_MANAGER
+import os
+
+# Set environment variables using constants
+os.environ[EVENTY_DATABASE_URL] = "postgresql://user:pass@localhost/eventy"
+os.environ[EVENTY_SQL_CREATE_TABLES] = "false"
+os.environ[EVENTY_QUEUE_MANAGER] = "eventy.sql.sql_queue_manager.SqlQueueManager"
+```
 
 ### Integration with Default Queue Manager
 
 ```python
 import os
+from eventy.constants import EVENTY_DATABASE_URL, EVENTY_QUEUE_MANAGER
 from eventy.queue_manager import get_default_queue_manager
 
 # Set environment variable to use SQL queue manager
-os.environ["EVENTY_QUEUE_MANAGER"] = "eventy.sql.sql_queue_manager.SqlQueueManager"
-os.environ["EVENTY_DATABASE_URL"] = "postgresql://user:password@localhost/eventy"
+os.environ[EVENTY_QUEUE_MANAGER] = "eventy.sql.sql_queue_manager.SqlQueueManager"
+os.environ[EVENTY_DATABASE_URL] = "postgresql://user:password@localhost/eventy"
 
 # Now get_default_queue_manager() will return SqlQueueManager
 manager = await get_default_queue_manager()
