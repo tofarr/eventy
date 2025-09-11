@@ -231,7 +231,9 @@ class SqlQueueManager(QueueManager):
                 queue = self._queues[payload_type]
                 if hasattr(queue, "_subscription_cache"):
                     queue._subscription_cache.clear()  # pylint: disable=protected-access
-                    queue._subscription_cache_dirty = True  # pylint: disable=protected-access
+                    queue._subscription_cache_dirty = (
+                        True  # pylint: disable=protected-access
+                    )
 
             except Exception as e:
                 session.rollback()

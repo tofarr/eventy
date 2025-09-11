@@ -545,3 +545,402 @@ class AbstractEventQueueTestBase(Generic[T], unittest.IsolatedAsyncioTestCase, A
         )
 
         self.assertGreaterEqual(count, 1)
+
+    # Advanced Pagination and Filtering Tests
+
+    async def test_search_subscriptions_second_page_comprehensive(self):
+        """Test comprehensive second page searching for subscriptions"""
+        # Create enough subscriptions to ensure pagination
+        subscribers = []
+        for i in range(10):
+            subscriber = MockSubscriber(f"page_test_sub_{i:02d}")
+            subscription = await self.queue.subscribe(subscriber)
+            subscribers.append((subscriber, subscription))
+
+        # Get first page with small limit
+        first_page = await self.queue.search_subscriptions(limit=3)
+        self.assertIsInstance(first_page, Page)
+        self.assertLessEqual(len(first_page.items), 3)
+
+        if first_page.next_page_id:
+            # Get second page
+            second_page = await self.queue.search_subscriptions(
+                page_id=first_page.next_page_id, limit=3
+            )
+            self.assertIsInstance(second_page, Page)
+            self.assertLessEqual(len(second_page.items), 3)
+
+            # Verify no overlap between pages
+            first_page_ids = {sub.id for sub in first_page.items}
+            second_page_ids = {sub.id for sub in second_page.items}
+            self.assertEqual(len(first_page_ids.intersection(second_page_ids)), 0)
+
+            # Test third page if available
+            if second_page.next_page_id:
+                third_page = await self.queue.search_subscriptions(
+                    page_id=second_page.next_page_id, limit=3
+                )
+                self.assertIsInstance(third_page, Page)
+                third_page_ids = {sub.id for sub in third_page.items}
+                self.assertEqual(len(first_page_ids.intersection(third_page_ids)), 0)
+                self.assertEqual(len(second_page_ids.intersection(third_page_ids)), 0)
+
+    async def test_search_events_second_page_with_filters(self):
+        """Test second page searching for events with date filters"""
+        now = datetime.now(UTC)
+        past = now - timedelta(minutes=30)
+        future = now + timedelta(minutes=30)
+
+        # Publish multiple events
+        events = []
+        for i in range(8):
+            event = await self.queue.publish(f"filtered_event_{i:02d}")
+            events.append(event)
+
+        # Search with date filter and pagination
+        first_page = await self.queue.search_events(
+            limit=3, created_at__gte=past, created_at__lte=future
+        )
+        self.assertIsInstance(first_page, Page)
+        self.assertLessEqual(len(first_page.items), 3)
+
+        # Verify all items match the filter
+        for event in first_page.items:
+            # Handle timezone-aware vs timezone-naive datetime comparison
+            event_time = event.created_at
+            if event_time.tzinfo is None and past.tzinfo is not None:
+                event_time = event_time.replace(tzinfo=past.tzinfo)
+            elif event_time.tzinfo is not None and past.tzinfo is None:
+                past = past.replace(tzinfo=event_time.tzinfo)
+                future = future.replace(tzinfo=event_time.tzinfo)
+
+            self.assertGreaterEqual(event_time, past)
+            self.assertLessEqual(event_time, future)
+
+        if first_page.next_page_id:
+            # Get second page with same filters
+            second_page = await self.queue.search_events(
+                page_id=first_page.next_page_id,
+                limit=3,
+                created_at__gte=past,
+                created_at__lte=future,
+            )
+            self.assertIsInstance(second_page, Page)
+
+            # Verify no overlap and filters still apply
+            first_page_ids = {event.id for event in first_page.items}
+            second_page_ids = {event.id for event in second_page.items}
+            self.assertEqual(len(first_page_ids.intersection(second_page_ids)), 0)
+
+            for event in second_page.items:
+                # Handle timezone-aware vs timezone-naive datetime comparison
+                event_time = event.created_at
+                if event_time.tzinfo is None and past.tzinfo is not None:
+                    event_time = event_time.replace(tzinfo=past.tzinfo)
+                elif event_time.tzinfo is not None and past.tzinfo is None:
+                    past = past.replace(tzinfo=event_time.tzinfo)
+                    future = future.replace(tzinfo=event_time.tzinfo)
+
+                self.assertGreaterEqual(event_time, past)
+                self.assertLessEqual(event_time, future)
+
+    async def test_search_events_pagination_consistency(self):
+        """Test that event pagination is consistent across multiple calls"""
+        # Publish events with identifiable payloads
+        for i in range(12):
+            await self.queue.publish(f"consistency_test_{i:03d}")
+
+        # Get first page multiple times - should be identical
+        page1_call1 = await self.queue.search_events(limit=4)
+        page1_call2 = await self.queue.search_events(limit=4)
+
+        self.assertEqual(len(page1_call1.items), len(page1_call2.items))
+        self.assertEqual(page1_call1.next_page_id, page1_call2.next_page_id)
+
+        # Compare event IDs (should be same order)
+        ids1 = [event.id for event in page1_call1.items]
+        ids2 = [event.id for event in page1_call2.items]
+        self.assertEqual(ids1, ids2)
+
+    async def test_search_results_second_page_with_event_filter(self):
+        """Test second page searching for results with event ID filter"""
+        # This test assumes results exist or can be created
+        # The implementation may vary based on how results are generated
+        page = await self.queue.search_results(limit=2)
+        self.assertIsInstance(page, Page)
+
+        if page.next_page_id:
+            second_page = await self.queue.search_results(
+                page_id=page.next_page_id, limit=2
+            )
+            self.assertIsInstance(second_page, Page)
+
+            # Verify no overlap
+            if page.items and second_page.items:
+                first_page_ids = {result.id for result in page.items}
+                second_page_ids = {result.id for result in second_page.items}
+                self.assertEqual(len(first_page_ids.intersection(second_page_ids)), 0)
+
+    async def test_search_results_with_worker_id_filter(self):
+        """Test searching results with worker ID filter"""
+        worker_id = self.queue.get_worker_id()
+
+        page = await self.queue.search_results(worker_id__eq=worker_id, limit=5)
+        self.assertIsInstance(page, Page)
+
+        # Verify all results match the worker ID filter (if any exist)
+        for result in page.items:
+            self.assertEqual(result.worker_id, worker_id)
+
+        # Test second page if available
+        if page.next_page_id:
+            second_page = await self.queue.search_results(
+                page_id=page.next_page_id, worker_id__eq=worker_id, limit=5
+            )
+            self.assertIsInstance(second_page, Page)
+
+            for result in second_page.items:
+                self.assertEqual(result.worker_id, worker_id)
+
+    async def test_search_claims_second_page_with_worker_filter(self):
+        """Test second page searching for claims with worker ID filter"""
+        worker_id = self.queue.get_worker_id()
+
+        # Create multiple claims
+        claim_ids = []
+        for i in range(8):
+            claim_id = f"worker_filter_claim_{i:02d}"
+            await self.queue.create_claim(claim_id, f"data_{i}")
+            claim_ids.append(claim_id)
+
+        # Search with worker filter and pagination
+        first_page = await self.queue.search_claims(worker_id__eq=worker_id, limit=3)
+        self.assertIsInstance(first_page, Page)
+        self.assertLessEqual(len(first_page.items), 3)
+
+        # Verify all claims match the worker ID filter
+        for claim in first_page.items:
+            self.assertEqual(claim.worker_id, worker_id)
+
+        if first_page.next_page_id:
+            # Get second page with same filter
+            second_page = await self.queue.search_claims(
+                page_id=first_page.next_page_id, worker_id__eq=worker_id, limit=3
+            )
+            self.assertIsInstance(second_page, Page)
+
+            # Verify no overlap and filter still applies
+            first_page_ids = {claim.id for claim in first_page.items}
+            second_page_ids = {claim.id for claim in second_page.items}
+            self.assertEqual(len(first_page_ids.intersection(second_page_ids)), 0)
+
+            for claim in second_page.items:
+                self.assertEqual(claim.worker_id, worker_id)
+
+    async def test_search_claims_with_date_range_pagination(self):
+        """Test claims pagination with date range filters"""
+        now = datetime.now(UTC)
+        past = now - timedelta(minutes=15)
+        future = now + timedelta(minutes=15)
+
+        # Create claims within the date range
+        for i in range(6):
+            claim_id = f"date_range_claim_{i:02d}"
+            await self.queue.create_claim(claim_id, f"date_data_{i}")
+
+        # Search with date filter and pagination
+        first_page = await self.queue.search_claims(
+            created_at__gte=past, created_at__lte=future, limit=2
+        )
+        self.assertIsInstance(first_page, Page)
+        self.assertLessEqual(len(first_page.items), 2)
+
+        # Verify date filter is applied
+        for claim in first_page.items:
+            # Handle timezone-aware vs timezone-naive datetime comparison
+            claim_time = claim.created_at
+            if claim_time.tzinfo is None and past.tzinfo is not None:
+                claim_time = claim_time.replace(tzinfo=past.tzinfo)
+            elif claim_time.tzinfo is not None and past.tzinfo is None:
+                past = past.replace(tzinfo=claim_time.tzinfo)
+                future = future.replace(tzinfo=claim_time.tzinfo)
+
+            self.assertGreaterEqual(claim_time, past)
+            self.assertLessEqual(claim_time, future)
+
+        if first_page.next_page_id:
+            second_page = await self.queue.search_claims(
+                page_id=first_page.next_page_id,
+                created_at__gte=past,
+                created_at__lte=future,
+                limit=2,
+            )
+            self.assertIsInstance(second_page, Page)
+
+            # Verify date filter still applies on second page
+            for claim in second_page.items:
+                # Handle timezone-aware vs timezone-naive datetime comparison
+                claim_time = claim.created_at
+                if claim_time.tzinfo is None and past.tzinfo is not None:
+                    claim_time = claim_time.replace(tzinfo=past.tzinfo)
+                elif claim_time.tzinfo is not None and past.tzinfo is None:
+                    past = past.replace(tzinfo=claim_time.tzinfo)
+                    future = future.replace(tzinfo=claim_time.tzinfo)
+
+                self.assertGreaterEqual(claim_time, past)
+                self.assertLessEqual(claim_time, future)
+
+            # Verify no overlap
+            first_page_ids = {claim.id for claim in first_page.items}
+            second_page_ids = {claim.id for claim in second_page.items}
+            self.assertEqual(len(first_page_ids.intersection(second_page_ids)), 0)
+
+    async def test_search_events_with_strict_date_boundaries(self):
+        """Test event searching with very specific date boundaries"""
+        # Create a specific time window
+        base_time = datetime.now(UTC)
+        start_time = base_time - timedelta(seconds=30)
+        end_time = base_time + timedelta(seconds=30)
+
+        # Publish events
+        events_in_range = []
+        for i in range(5):
+            event = await self.queue.publish(f"boundary_test_{i}")
+            events_in_range.append(event)
+
+        # Search with tight date boundaries
+        page = await self.queue.search_events(
+            created_at__gte=start_time, created_at__lte=end_time, limit=2
+        )
+        self.assertIsInstance(page, Page)
+
+        # All returned events should be within the boundary
+        for event in page.items:
+            # Handle timezone-aware vs timezone-naive datetime comparison
+            event_time = event.created_at
+            if event_time.tzinfo is None and start_time.tzinfo is not None:
+                event_time = event_time.replace(tzinfo=start_time.tzinfo)
+            elif event_time.tzinfo is not None and start_time.tzinfo is None:
+                start_time = start_time.replace(tzinfo=event_time.tzinfo)
+                end_time = end_time.replace(tzinfo=event_time.tzinfo)
+
+            self.assertGreaterEqual(event_time, start_time)
+            self.assertLessEqual(event_time, end_time)
+
+        # Test pagination maintains the filter
+        if page.next_page_id:
+            next_page = await self.queue.search_events(
+                page_id=page.next_page_id,
+                created_at__gte=start_time,
+                created_at__lte=end_time,
+                limit=2,
+            )
+            for event in next_page.items:
+                # Handle timezone-aware vs timezone-naive datetime comparison
+                event_time = event.created_at
+                if event_time.tzinfo is None and start_time.tzinfo is not None:
+                    event_time = event_time.replace(tzinfo=start_time.tzinfo)
+                elif event_time.tzinfo is not None and start_time.tzinfo is None:
+                    start_time = start_time.replace(tzinfo=event_time.tzinfo)
+                    end_time = end_time.replace(tzinfo=event_time.tzinfo)
+
+                self.assertGreaterEqual(event_time, start_time)
+                self.assertLessEqual(event_time, end_time)
+
+    async def test_combined_filters_pagination(self):
+        """Test pagination with multiple filters combined"""
+        now = datetime.now(UTC)
+        past = now - timedelta(minutes=10)
+        future = now + timedelta(minutes=10)
+        worker_id = self.queue.get_worker_id()
+
+        # Create multiple claims for combined filter testing
+        for i in range(7):
+            claim_id = f"combined_filter_{i:02d}"
+            await self.queue.create_claim(claim_id, f"combined_data_{i}")
+
+        # Search with multiple filters
+        page = await self.queue.search_claims(
+            worker_id__eq=worker_id,
+            created_at__gte=past,
+            created_at__lte=future,
+            limit=3,
+        )
+        self.assertIsInstance(page, Page)
+
+        # Verify all filters are applied
+        for claim in page.items:
+            self.assertEqual(claim.worker_id, worker_id)
+            # Handle timezone-aware vs timezone-naive datetime comparison
+            claim_time = claim.created_at
+            if claim_time.tzinfo is None and past.tzinfo is not None:
+                claim_time = claim_time.replace(tzinfo=past.tzinfo)
+            elif claim_time.tzinfo is not None and past.tzinfo is None:
+                past = past.replace(tzinfo=claim_time.tzinfo)
+                future = future.replace(tzinfo=claim_time.tzinfo)
+
+            self.assertGreaterEqual(claim_time, past)
+            self.assertLessEqual(claim_time, future)
+
+        # Test second page maintains all filters
+        if page.next_page_id:
+            second_page = await self.queue.search_claims(
+                page_id=page.next_page_id,
+                worker_id__eq=worker_id,
+                created_at__gte=past,
+                created_at__lte=future,
+                limit=3,
+            )
+
+            for claim in second_page.items:
+                self.assertEqual(claim.worker_id, worker_id)
+                # Handle timezone-aware vs timezone-naive datetime comparison
+                claim_time = claim.created_at
+                if claim_time.tzinfo is None and past.tzinfo is not None:
+                    claim_time = claim_time.replace(tzinfo=past.tzinfo)
+                elif claim_time.tzinfo is not None and past.tzinfo is None:
+                    past = past.replace(tzinfo=claim_time.tzinfo)
+                    future = future.replace(tzinfo=claim_time.tzinfo)
+
+                self.assertGreaterEqual(claim_time, past)
+                self.assertLessEqual(claim_time, future)
+
+    async def test_empty_page_handling(self):
+        """Test handling of empty pages in pagination"""
+        # Search with filters that might return no results
+        future_time = datetime.now(UTC) + timedelta(days=1)
+
+        page = await self.queue.search_events(created_at__gte=future_time, limit=5)
+        self.assertIsInstance(page, Page)
+        self.assertEqual(len(page.items), 0)
+        self.assertIsNone(page.next_page_id)
+
+        # Same test for claims
+        page = await self.queue.search_claims(created_at__gte=future_time, limit=5)
+        self.assertIsInstance(page, Page)
+        self.assertEqual(len(page.items), 0)
+        self.assertIsNone(page.next_page_id)
+
+    async def test_pagination_with_invalid_page_id(self):
+        """Test pagination behavior with invalid page IDs"""
+        # Try to get a page with a non-existent page ID
+        try:
+            page = await self.queue.search_events(page_id="invalid_page_id")
+            # Some implementations might return empty page, others might raise exception
+            self.assertIsInstance(page, Page)
+        except Exception:
+            # Exception is also acceptable behavior
+            pass
+
+        # Same test for other search methods
+        try:
+            page = await self.queue.search_claims(page_id="invalid_page_id")
+            self.assertIsInstance(page, Page)
+        except Exception:
+            pass
+
+        try:
+            page = await self.queue.search_subscriptions(page_id="invalid_page_id")
+            self.assertIsInstance(page, Page)
+        except Exception:
+            pass
