@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 from dataclasses import dataclass, field
 from typing import TypeVar, Dict, Optional
 
@@ -34,8 +35,9 @@ class SqlQueueManager(QueueManager):
     events, results, subscribers, and claims in database tables.
     """
 
-    database_url: str
+    database_url: str = field(default_factory=lambda: os.getenv('EVENTY_DATABASE_URL', 'sqlite:///./eventy.db'))
     serializer: Serializer = field(default_factory=get_default_serializer)
+    create_tables: bool = field(default_factory=lambda: os.getenv('EVENTY_SQL_CREATE_TABLES', 'true').lower() == 'true')
 
     # Internal storage
     _queues: Dict[type, EventQueue] = field(default_factory=dict, init=False)
@@ -44,14 +46,11 @@ class SqlQueueManager(QueueManager):
     _session_factory: Optional[sessionmaker] = field(default=None, init=False)
 
     def __post_init__(self):
-        """Initialize the database connection and create tables"""
+        """Initialize the database connection"""
         # Convert async database URL to sync for the manager
         sync_url = self.database_url.replace('+aiosqlite', '')
         self._engine = create_engine(sync_url)
         self._session_factory = sessionmaker(bind=self._engine)
-        
-        # Create all tables
-        Base.metadata.create_all(self._engine)
         
         _LOGGER.info(f"Initialized SqlQueueManager with database: {sync_url}")
 
@@ -65,6 +64,11 @@ class SqlQueueManager(QueueManager):
     async def __aenter__(self):
         """Begin using this queue manager"""
         self._entered = True
+
+        # Create tables if flag is set
+        if self.create_tables:
+            Base.metadata.create_all(self._engine)
+            _LOGGER.info("Created database tables")
 
         # Start all existing queues
         await asyncio.gather(*[queue.__aenter__() for queue in self._queues.values()])

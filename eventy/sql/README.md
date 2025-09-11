@@ -1,6 +1,6 @@
 # SQL Event Queue Implementation
 
-This module provides SQL-based implementations of EventQueue and QueueManager using SQLAlchemy and Alembic for database operations and migrations.
+This module provides SQL-based implementations of EventQueue and QueueManager using SQLAlchemy for database operations.
 
 ## Installation
 
@@ -10,7 +10,7 @@ Install the SQL dependencies:
 pip install eventy[sql]
 ```
 
-This will install SQLAlchemy and Alembic as optional dependencies.
+This will install SQLAlchemy and aiosqlite as optional dependencies.
 
 ## Quick Start
 
@@ -149,50 +149,33 @@ Stores worker claims for distributed processing.
 | data | Text | Optional claim data |
 | created_at | DateTime | Claim creation timestamp |
 
-## Database Migrations
+## Table Creation
 
-The SQL implementation includes Alembic integration for database schema management.
+The SQL implementation automatically creates database tables when the SqlQueueManager is entered. This behavior can be controlled via environment variable or constructor parameter.
 
 ### Environment Variables
 
-Set the database URL via environment variable:
+- `EVENTY_SQL_CREATE_TABLES` - Set to "false" to disable automatic table creation (default: "true")
 
 ```bash
-export EVENTY_DATABASE_URL="postgresql://user:password@localhost/eventy"
+# Disable automatic table creation
+export EVENTY_SQL_CREATE_TABLES="false"
 ```
 
-### Migration Commands
-
-```bash
-# Create a new migration
-python -m eventy.sql.migrate create "Add new feature"
-
-# Upgrade to latest schema
-python -m eventy.sql.migrate upgrade
-
-# Upgrade to specific revision
-python -m eventy.sql.migrate upgrade abc123
-
-# Downgrade one revision
-python -m eventy.sql.migrate downgrade
-
-# Show current revision
-python -m eventy.sql.migrate current
-
-# Show migration history
-python -m eventy.sql.migrate history
-```
-
-### Programmatic Migration Management
+### Manual Table Creation Control
 
 ```python
-from eventy.sql import upgrade_database, create_migration
+# Disable table creation via constructor
+manager = SqlQueueManager(
+    database_url="postgresql://user:password@localhost/eventy",
+    create_tables=False
+)
 
-# Upgrade database programmatically
-upgrade_database("postgresql://user:password@localhost/eventy")
-
-# Create migration programmatically
-create_migration("Add new feature", "postgresql://user:password@localhost/eventy")
+# Or enable it explicitly
+manager = SqlQueueManager(
+    database_url="postgresql://user:password@localhost/eventy", 
+    create_tables=True
+)
 ```
 
 ## Configuration
@@ -200,6 +183,7 @@ create_migration("Add new feature", "postgresql://user:password@localhost/eventy
 ### Environment Variables
 
 - `EVENTY_DATABASE_URL` - Database connection URL
+- `EVENTY_SQL_CREATE_TABLES` - Set to "false" to disable automatic table creation (default: "true")
 - `EVENTY_QUEUE_MANAGER` - Set to `eventy.sql.SqlQueueManager` to use SQL as default
 
 ### Integration with Default Queue Manager
@@ -286,7 +270,7 @@ The tests use temporary SQLite databases and clean up automatically.
 To migrate from file-based queues to SQL:
 
 1. Install SQL dependencies: `pip install eventy[sql]`
-2. Set up your database and run migrations
+2. Set up your database (tables will be created automatically)
 3. Update your configuration to use `SqlQueueManager`
 4. Optionally migrate existing data using custom scripts
 

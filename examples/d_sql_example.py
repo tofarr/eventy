@@ -11,8 +11,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 try:
-    from eventy.sql import SqlEventQueue, SqlQueueManager, upgrade_database
+    from eventy.sql import SqlEventQueue, SqlQueueManager
     from eventy.subscribers.nonce_subscriber import NonceSubscriber
+    from eventy.subscribers.subscriber import Subscriber
     SQL_AVAILABLE = True
 except ImportError:
     logger.error("SQL dependencies not available. Install with: pip install eventy[sql]")
@@ -35,6 +36,15 @@ class NotificationPayload:
     urgent: bool = False
 
 
+class TaskProcessor(Subscriber[TaskPayload]):
+    """Simple task processor subscriber."""
+    async def on_event(self, event, event_queue):
+        logger.info(f"Processing task: {event.payload.task_name}")
+        # Simulate some work
+        await asyncio.sleep(0.1)
+        logger.info(f"Completed task: {event.payload.task_name}")
+
+
 async def demonstrate_sql_event_queue():
     """Demonstrate basic SqlEventQueue usage."""
     if not SQL_AVAILABLE:
@@ -42,17 +52,10 @@ async def demonstrate_sql_event_queue():
         
     logger.info("=== SqlEventQueue Demo ===")
     
-    # Use SQLite for this example
-    database_url = "sqlite:///./example_eventy.db"
+    # Use SQLite with async driver for this example
+    database_url = "sqlite+aiosqlite:///./example_eventy.db"
     
-    # Ensure database schema is up to date
-    try:
-        upgrade_database(database_url)
-        logger.info("Database schema updated")
-    except Exception as e:
-        logger.info(f"Database migration info: {e}")
-    
-    # Create event queue
+    # Create event queue (tables will be created automatically when using SqlQueueManager)
     queue = SqlEventQueue(
         database_url=database_url,
         payload_type=TaskPayload
@@ -83,7 +86,10 @@ async def demonstrate_sql_event_queue():
         
         # Add a subscriber
         logger.info("\n--- Adding Subscriber ---")
-        subscriber = NonceSubscriber(nonce="task-processor-1")
+        
+        # Wrap with NonceSubscriber to ensure single execution
+        base_subscriber = TaskProcessor()
+        subscriber = NonceSubscriber(subscriber=base_subscriber)
         subscription = await queue.subscribe(subscriber)
         logger.info(f"Added subscriber {subscription.id}")
         
@@ -145,8 +151,11 @@ async def demonstrate_sql_queue_manager():
         
     logger.info("\n=== SqlQueueManager Demo ===")
     
-    database_url = "sqlite:///./example_eventy.db"
+    database_url = "sqlite+aiosqlite:///./example_eventy.db"
     
+    # SqlQueueManager automatically creates tables by default
+    # To disable: manager = SqlQueueManager(database_url=database_url, create_tables=False)
+    # Or set environment variable: EVENTY_SQL_CREATE_TABLES=false
     manager = SqlQueueManager(database_url=database_url)
     
     async with manager:
@@ -215,7 +224,7 @@ async def demonstrate_environment_integration():
     logger.info("\n=== Environment Integration Demo ===")
     
     # Set environment variables
-    os.environ["EVENTY_DATABASE_URL"] = "sqlite:///./example_eventy.db"
+    os.environ["EVENTY_DATABASE_URL"] = "sqlite+aiosqlite:///./example_eventy.db"
     os.environ["EVENTY_QUEUE_MANAGER"] = "eventy.sql.sql_queue_manager.SqlQueueManager"
     
     # Import after setting environment variables
