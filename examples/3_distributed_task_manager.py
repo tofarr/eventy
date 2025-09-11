@@ -33,9 +33,9 @@ import math
 import random
 import subprocess
 import sys
-import time
 from dataclasses import dataclass
 from typing import List
+from uuid import UUID
 
 from eventy.event_queue import EventQueue
 from eventy.mem.memory_queue_manager import MemoryQueueManager
@@ -57,11 +57,13 @@ class FactorialResponseEvent:
     value: int
 
 
+request_queue: EventQueue[FactorialRequestEvent] | None = None
+response_queue: EventQueue[FactorialResponseEvent] | None = None
+
+
 @dataclass
 class FactorialRequestSubscriber(Subscriber[FactorialRequestEvent]):
     """Worker subscriber that calculates factorials and publishes results."""
-    
-    response_queue: EventQueue[FactorialResponseEvent]
     
     async def on_event(
         self, 
@@ -79,7 +81,7 @@ class FactorialRequestSubscriber(Subscriber[FactorialRequestEvent]):
             
             # Publish the result
             response_event = FactorialResponseEvent(value=result)
-            await self.response_queue.publish(response_event)
+            await response_queue.publish(response_event)
             
         except Exception as e:
             print(f"❌ Worker error calculating factorial of {request_value}: {e}")
@@ -100,6 +102,7 @@ class FactorialResponseSubscriber(Subscriber[FactorialResponseEvent]):
 
 
 async def run_worker():
+    global request_queue, response_queue
     """Run in worker mode - process factorial requests."""
     print("🔧 Starting worker mode...")
     
@@ -124,11 +127,11 @@ async def run_worker():
             print(f"✅ Worker connected with ID: {request_queue.get_worker_id()}")
             
             # Create the factorial request subscriber wrapped in NonceSubscriber
-            factorial_subscriber = FactorialRequestSubscriber(response_queue=response_queue)
+            factorial_subscriber = FactorialRequestSubscriber()
             nonce_subscriber = NonceSubscriber(subscriber=factorial_subscriber)
             
             # Subscribe to the request queue
-            subscription = await request_queue.subscribe(nonce_subscriber, 0)
+            subscription = await request_queue.subscribe(nonce_subscriber, True)
             print(f"✅ Worker subscribed to requests with subscription ID: {subscription.id}")
             
             try:
@@ -137,7 +140,7 @@ async def run_worker():
                 while True:
                     await asyncio.sleep(1)
                     
-            except KeyboardInterrupt:
+            except asyncio.CancelledError:
                 print("\n🛑 Worker shutting down...")
                 await request_queue.unsubscribe(subscription.id)
                 print("✅ Worker unsubscribed and shut down")
@@ -145,6 +148,7 @@ async def run_worker():
 
 async def run_broker(num_workers: int, interval: float, max_value: int):
     """Run in broker mode - generate requests and collect results."""
+    global request_queue, response_queue
     print(f"🎯 Starting broker mode with {num_workers} workers...")
     
     # Get the default queue manager
@@ -169,7 +173,7 @@ async def run_broker(num_workers: int, interval: float, max_value: int):
             
             # Create and subscribe the response subscriber
             response_subscriber = FactorialResponseSubscriber()
-            response_subscription = await response_queue.subscribe(response_subscriber, 0)
+            response_subscription = await response_queue.subscribe(response_subscriber, True)
             print(f"✅ Broker subscribed to responses with subscription ID: {response_subscription.id}")
             
             # Start worker subprocesses
@@ -205,7 +209,7 @@ async def run_broker(num_workers: int, interval: float, max_value: int):
                     # Wait for the specified interval
                     await asyncio.sleep(interval)
                     
-            except KeyboardInterrupt:
+            except asyncio.CancelledError:
                 print("\n🛑 Broker shutting down...")
                 
                 # Unsubscribe from responses
@@ -230,6 +234,8 @@ async def run_broker(num_workers: int, interval: float, max_value: int):
                 print(f"📊 Total requests generated: {request_count}")
                 print("👋 Broker shut down complete")
 
+        await queue_manager.reset(FactorialRequestEvent)
+        await queue_manager.reset(FactorialResponseEvent)
 
 def main():
     """Main function that parses arguments and runs the appropriate mode."""
@@ -251,13 +257,13 @@ def main():
     parser.add_argument(
         "--interval", 
         type=float, 
-        default=1.0,
+        default=1000.0,
         help="Interval in seconds between generating new requests in broker mode (default: 1.0)"
     )
     parser.add_argument(
         "--max-value", 
         type=int, 
-        default=100,
+        default=10,
         help="Maximum value for random factorial requests in broker mode (default: 100)"
     )
     

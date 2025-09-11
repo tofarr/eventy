@@ -98,3 +98,9 @@ class MemoryQueueManager(QueueManager):
 
         del self._queues[payload_type]
         _LOGGER.info(f"Deregistered queue for payload type: {payload_type}")
+
+    async def reset(self, payload_type: type[T]):
+        queue = MemoryEventQueue(payload_type=payload_type, serializer=self.serializer)
+        if self._entered:
+            await queue.__aenter__()
+        self._queues[payload_type] = queue

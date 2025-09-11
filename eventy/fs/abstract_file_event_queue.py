@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+import shutil
 from typing import TypeVar, Optional, AsyncIterator
 from uuid import UUID, uuid4
 
@@ -57,7 +58,7 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
     worker_id: UUID = field(default_factory=uuid4)
 
     # Event counter for generating sequential IDs
-    _next_event_id: int = field(default=1, init=False)
+    next_event_id: int = field(default=1, init=False)
 
     # Track the highest processed event ID to avoid duplicate processing
     processed_event_id: int = field(default=0, init=False)
@@ -99,7 +100,7 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
                 except ValueError:
                     # Skip files that aren't numeric
                     continue
-        self._next_event_id = max_id + 1
+        self.next_event_id = max_id + 1
 
     def _check_running(self):
         """Check if the queue is running and raise error if not"""
@@ -120,8 +121,8 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
 
         # Try to create event with sequential ID, recalculating if file exists
         while True:
-            event_id = self._next_event_id
-            self._next_event_id += 1
+            event_id = self.next_event_id
+            self.next_event_id += 1
 
             event = QueueEvent(id=event_id, payload=payload)
 
