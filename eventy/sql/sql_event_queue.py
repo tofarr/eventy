@@ -504,8 +504,8 @@ class SqlEventQueue(EventQueue[T]):
 
         async with self.session_factory()() as session:
             query = select(
-                func.count(SqlEventResult.id)
-            )  # pylint: disable=not-callable
+                func.count(SqlEventResult.id)  # pylint: disable=not-callable
+            )
 
             conditions = []
             if event_id__eq is not None:
