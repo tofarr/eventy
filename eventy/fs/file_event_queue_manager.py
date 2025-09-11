@@ -2,10 +2,12 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
+import shutil
 from typing import TypeVar, Dict
 
 from eventy.event_queue import EventQueue
 from eventy.eventy_error import EventyError
+from eventy.fs.abstract_file_event_queue import AbstractFileEventQueue
 from eventy.fs.polling_file_event_queue import PollingFileEventQueue
 from eventy.queue_manager import QueueManager
 from eventy.serializers.serializer import Serializer, get_default_serializer
@@ -172,3 +174,11 @@ class FileEventQueueManager(QueueManager):
 
         del self._queues[payload_type]
         _LOGGER.info(f"Deregistered queue for payload type: {payload_type}")
+
+    async def reset(self, payload_type: type[T]):
+        queue: AbstractFileEventQueue[T] = self._queues[payload_type]
+        shutil.rmtree(queue.events_dir)
+        shutil.rmtree(queue.results_dir)
+        shutil.rmtree(queue.claims_dir)
+        queue.processed_event_id = 0
+        queue.next_event_id = 1
