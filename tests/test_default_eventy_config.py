@@ -177,3 +177,9 @@ class TestDefaultEventyConfig:
         assert "DefaultEventyConfig" in repr_str
         assert "payload_types" in repr_str
         assert "subscriber_types" in repr_str
+
+    def test_simple_config_creation(self):
+        """Test simple creation of DefaultEventyConfig with one payload type"""
+        config = DefaultEventyConfig(payload_types=[str])
+        assert len(config.get_payload_types()) == 1
+        assert str in config.get_payload_types()
