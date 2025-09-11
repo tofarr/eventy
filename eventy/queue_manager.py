@@ -92,6 +92,8 @@ async def get_default_queue_manager() -> QueueManager:
             else:
                 from eventy.fs.file_queue_manager import FileQueueManager
                 _default_queue_manager = FileQueueManager(root_dir=root_dir)
+        
+        _LOGGER.info('Using Queue Manager: {manager_class.__name__}')
 
         try:
             config = get_config()
