@@ -12,7 +12,7 @@ from eventy.redis.redis_file_event_queue import RedisFileEventQueue
 
 
 @dataclass
-class TestPayload:
+class MockPayload:
     message: str
     value: int
 
@@ -69,7 +69,7 @@ class TestRedisQueueManager:
         with pytest.raises(
             EventyError, match="must be entered using async context manager"
         ):
-            await manager.get_event_queue(TestPayload)
+            await manager.get_event_queue(MockPayload)
 
         with pytest.raises(
             EventyError, match="must be entered using async context manager"
@@ -79,7 +79,7 @@ class TestRedisQueueManager:
         with pytest.raises(
             EventyError, match="must be entered using async context manager"
         ):
-            await manager.deregister(TestPayload)
+            await manager.deregister(MockPayload)
 
     @pytest.mark.asyncio
     async def test_register_and_get_queue(self):
@@ -106,13 +106,13 @@ class TestRedisQueueManager:
 
             async with manager:
                 # Register a payload type
-                await manager.register(TestPayload)
+                await manager.register(MockPayload)
 
                 # Check that queue was created
-                assert TestPayload in manager._queues
-                queue = await manager.get_event_queue(TestPayload)
+                assert MockPayload in manager._queues
+                queue = await manager.get_event_queue(MockPayload)
                 assert isinstance(queue, RedisFileEventQueue)
-                assert queue.payload_type == TestPayload
+                assert queue.payload_type == MockPayload
 
     @pytest.mark.asyncio
     async def test_register_duplicate_payload_type(self):
@@ -137,12 +137,12 @@ class TestRedisQueueManager:
 
             async with manager:
                 # Register once
-                await manager.register(TestPayload)
-                initial_queue = manager._queues[TestPayload]
+                await manager.register(MockPayload)
+                initial_queue = manager._queues[MockPayload]
 
                 # Register again - should not create new queue
-                await manager.register(TestPayload)
-                assert manager._queues[TestPayload] is initial_queue
+                await manager.register(MockPayload)
+                assert manager._queues[MockPayload] is initial_queue
 
     @pytest.mark.asyncio
     async def test_get_queue_types(self):
@@ -171,9 +171,9 @@ class TestRedisQueueManager:
                 assert types == []
 
                 # Register a type
-                await manager.register(TestPayload)
+                await manager.register(MockPayload)
                 types = await manager.get_queue_types()
-                assert types == [TestPayload]
+                assert types == [MockPayload]
 
     @pytest.mark.asyncio
     async def test_deregister(self):
@@ -198,11 +198,11 @@ class TestRedisQueueManager:
 
             async with manager:
                 # Register and then deregister
-                await manager.register(TestPayload)
-                assert TestPayload in manager._queues
+                await manager.register(MockPayload)
+                assert MockPayload in manager._queues
 
-                await manager.deregister(TestPayload)
-                assert TestPayload not in manager._queues
+                await manager.deregister(MockPayload)
+                assert MockPayload not in manager._queues
 
     @pytest.mark.asyncio
     async def test_deregister_nonexistent_type(self):
@@ -211,7 +211,7 @@ class TestRedisQueueManager:
 
         async with manager:
             # Should not raise error, just log warning
-            await manager.deregister(TestPayload)
+            await manager.deregister(MockPayload)
 
     @pytest.mark.asyncio
     async def test_get_nonexistent_queue(self):
@@ -222,7 +222,7 @@ class TestRedisQueueManager:
             with pytest.raises(
                 EventyError, match="No queue registered for payload type"
             ):
-                await manager.get_event_queue(TestPayload)
+                await manager.get_event_queue(MockPayload)
 
     @pytest.mark.asyncio
     async def test_reset_queue(self):
@@ -248,10 +248,10 @@ class TestRedisQueueManager:
             mock_redis_factory.return_value = mock_redis
 
             async with manager:
-                await manager.register(TestPayload)
+                await manager.register(MockPayload)
 
                 # Reset should not raise error
-                await manager.reset(TestPayload)
+                await manager.reset(MockPayload)
 
                 # Verify Redis keys were cleared
                 mock_redis.keys.assert_called()
@@ -264,7 +264,7 @@ class TestRedisQueueManager:
 
         async with manager:
             with pytest.raises(EventyError, match="No queue found for payload type"):
-                await manager.reset(TestPayload)
+                await manager.reset(MockPayload)
 
     @pytest.mark.asyncio
     async def test_set_resync_for_all_queues(self):
@@ -288,13 +288,13 @@ class TestRedisQueueManager:
             mock_redis_factory.return_value = mock_redis
 
             async with manager:
-                await manager.register(TestPayload)
+                await manager.register(MockPayload)
 
                 # Set resync to True
                 await manager.set_resync_for_all_queues(True)
                 assert manager.resync is True
 
-                queue = manager._queues[TestPayload]
+                queue = manager._queues[MockPayload]
                 assert queue.resync is True
 
     @pytest.mark.asyncio
@@ -319,11 +319,11 @@ class TestRedisQueueManager:
             mock_redis_factory.return_value = mock_redis
 
             async with manager:
-                await manager.register(TestPayload)
+                await manager.register(MockPayload)
 
                 status = await manager.get_redis_connection_status()
-                assert TestPayload in status
-                assert status[TestPayload] is True  # Redis is connected
+                assert MockPayload in status
+                assert status[MockPayload] is True  # Redis is connected
 
     @pytest.mark.asyncio
     async def test_redis_connection_failure_fallback(self):
@@ -335,15 +335,15 @@ class TestRedisQueueManager:
             "redis.asyncio.from_url", side_effect=Exception("Connection failed")
         ):
             async with manager:
-                await manager.register(TestPayload)
+                await manager.register(MockPayload)
 
                 # Queue should still be created and functional
-                queue = await manager.get_event_queue(TestPayload)
+                queue = await manager.get_event_queue(MockPayload)
                 assert isinstance(queue, RedisFileEventQueue)
 
                 # Redis should be None (fallback mode)
                 status = await manager.get_redis_connection_status()
-                assert status[TestPayload] is False
+                assert status[MockPayload] is False
 
     @pytest.mark.asyncio
     async def test_queue_creation_with_custom_config(self):
@@ -377,8 +377,8 @@ class TestRedisQueueManager:
             mock_redis_factory.return_value = mock_redis
 
             async with manager:
-                await manager.register(TestPayload)
-                queue = await manager.get_event_queue(TestPayload)
+                await manager.register(MockPayload)
+                queue = await manager.get_event_queue(MockPayload)
 
                 # Verify custom configuration was applied
                 assert queue.redis_url == "redis://custom:6380"

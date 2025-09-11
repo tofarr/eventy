@@ -34,7 +34,7 @@ EVENTY_ROOT_DIR = "EVENTY_ROOT_DIR"
 """Environment variable to specify the root directory for file system based implementation
 """
 
-DEFAULT_ROOT_DIR = str(Path(os.path.expanduser("~")) / ".eventy")
+DEFAULT_ROOT_DIR = str(".eventy")
 """ Default root directory
 """
 
@@ -45,3 +45,21 @@ EVENTY_REDIS_URL = "EVENTY_REDIS_URL"
 # Redis configuration
 EVENTY_REDIS_PASSWORD = "EVENTY_REDIS_PASSWORD"
 """Environment variable to specify the redis password for redis based implementation"""
+
+# SQL configuration
+EVENTY_DATABASE_URL = "EVENTY_DATABASE_URL"
+"""Environment variable to specify the database URL for SQL-based implementation.
+Default: sqlite:///./eventy.db
+"""
+
+DEFAULT_DATABASE_URL = "sqlite:///./eventy.db"
+"""Default database URL for SQL-based implementation"""
+
+EVENTY_SQL_CREATE_TABLES = "EVENTY_SQL_CREATE_TABLES"
+"""Environment variable to control automatic table creation in SQL-based implementation.
+Set to 'false' to disable automatic table creation.
+Default: true
+"""
+
+DEFAULT_SQL_CREATE_TABLES = "true"
+"""Default value for SQL table creation flag"""

@@ -2,9 +2,8 @@ import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from pathlib import Path
-from typing import TypeVar, Optional, Any
+from datetime import datetime
+from typing import TypeVar, Optional
 from uuid import UUID, uuid4
 
 try:
@@ -181,7 +180,10 @@ class RedisFileEventQueue(AbstractFileEventQueue[T]):
         await self._publish_to_redis(
             "add_event", {"event_id": event.id, "worker_id": str(self.worker_id)}
         )
+
+        # Notify subscribers
         await self._notify_subscribers_cached(event)
+
         return event
 
     async def create_claim(self, claim_id: str, data: str | None = None) -> bool:

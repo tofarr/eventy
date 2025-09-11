@@ -142,4 +142,6 @@ cython_debug/
 
 .DS_Store
 
-tmp/
+# Eventy files
+.eventy/
+.eventy.db
