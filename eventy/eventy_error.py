@@ -9,5 +9,3 @@ class SkipException(EventyError):
     should be skipped for this worker, resulting in an EventResult with success=False
     and a detail message indicating that the event was skipped.
     """
-
-    pass
