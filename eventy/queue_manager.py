@@ -46,7 +46,7 @@ class QueueManager(ABC):
         """Finish using this queue manager"""
 
     async def reset(self, payload_type: type[T]):
-        """Clear all Events, Results and claims"""
+        """Clear all Events, Results and claims. Calling this is likely to break a queue and any attached subscribers."""
 
 
 # Global cache for the default queue manager instance
