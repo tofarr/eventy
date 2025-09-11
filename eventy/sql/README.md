@@ -244,16 +244,15 @@ queue._engine = engine  # Override default engine
 ```
 
 ### Serialization
-The implementation uses the configured serializer (default: pickle) for storing payloads and subscribers. For better performance and cross-language compatibility, consider using JSON serialization:
+The implementation uses the configured serializer (default: pickle) for storing payloads and subscribers. For better performance and cross-language compatibility, consider using JSON serialization.
 
 ```python
-from eventy.serializers import JsonSerializer
+from eventy.serializers.pydantic_serializer import PydanticSerializer
 
 queue = SqlEventQueue(
     database_url=database_url,
     payload_type=MyPayload,
-    event_serializer=JsonSerializer(),
-    subscriber_serializer=JsonSerializer()
+    event_serializer=PydanticSerializer(TypeAdapter(MyPayload)),
 )
 ```
 
