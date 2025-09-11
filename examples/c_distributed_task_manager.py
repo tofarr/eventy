@@ -35,7 +35,6 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from typing import List
-from uuid import UUID
 
 from eventy.event_queue import EventQueue
 from eventy.mem.memory_queue_manager import MemoryQueueManager
@@ -43,6 +42,7 @@ from eventy.queue_event import QueueEvent
 from eventy.queue_manager import get_default_queue_manager
 from eventy.subscribers.nonce_subscriber import NonceSubscriber
 from eventy.subscribers.subscriber import Subscriber
+from eventy.subscribers.worker_match_subscriber import WorkerMatchSubscriber
 
 
 @dataclass
@@ -173,7 +173,8 @@ async def run_broker(num_workers: int, interval: float, max_value: int):
             
             # Create and subscribe the response subscriber
             response_subscriber = FactorialResponseSubscriber()
-            response_subscription = await response_queue.subscribe(response_subscriber, True)
+            worker_match_subscriber = WorkerMatchSubscriber(response_subscriber, response_queue.get_worker_id())
+            response_subscription = await response_queue.subscribe(worker_match_subscriber, True)
             print(f"✅ Broker subscribed to responses with subscription ID: {response_subscription.id}")
             
             # Start worker subprocesses
@@ -257,13 +258,13 @@ def main():
     parser.add_argument(
         "--interval", 
         type=float, 
-        default=1000.0,
+        default=1.0,
         help="Interval in seconds between generating new requests in broker mode (default: 1.0)"
     )
     parser.add_argument(
         "--max-value", 
         type=int, 
-        default=10,
+        default=100,
         help="Maximum value for random factorial requests in broker mode (default: 100)"
     )
     
