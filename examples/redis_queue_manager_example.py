@@ -77,8 +77,8 @@ async def main():
         task1 = TaskPayload(task_id="task-001", description="Process user data", priority=1)
         task2 = TaskPayload(task_id="task-002", description="Generate report", priority=2)
         
-        event1 = await task_queue.create_event(task1)
-        event2 = await task_queue.create_event(task2)
+        event1 = await task_queue.publish(task1)
+        event2 = await task_queue.publish(task2)
         
         logger.info(f"Created task events: {event1.id}, {event2.id}")
         
@@ -94,8 +94,8 @@ async def main():
             notification_type="info"
         )
         
-        notif_event1 = await notification_queue.create_event(notification1)
-        notif_event2 = await notification_queue.create_event(notification2)
+        notif_event1 = await notification_queue.publish(notification1)
+        notif_event2 = await notification_queue.publish(notification2)
         
         logger.info(f"Created notification events: {notif_event1.id}, {notif_event2.id}")
         
@@ -111,7 +111,7 @@ async def main():
             
             # Create result
             result = f"Task {claim.payload.task_id} completed successfully"
-            await task_queue.create_result(claim.event_id, result)
+            await task_queue.add_result(claim.event_id, result)
             logger.info(f"Task {claim.payload.task_id} completed")
         
         # Process notification events
@@ -123,7 +123,7 @@ async def main():
             
             # Create result
             result = f"Notification sent to {claim.payload.user_id}"
-            await notification_queue.create_result(claim.event_id, result)
+            await notification_queue.add_result(claim.event_id, result)
             logger.info(f"Notification sent to {claim.payload.user_id}")
         
         # Show queue statistics
@@ -177,14 +177,14 @@ async def demonstrate_fallback():
         
         # Create and process an event
         task = TaskPayload(task_id="fallback-001", description="Test fallback mode")
-        event = await task_queue.create_event(task)
+        event = await task_queue.publish(task)
         logger.info(f"Created event in fallback mode: {event.id}")
         
         # Process the event
         async for claim in task_queue.iter_claims(limit=1):
             logger.info(f"Processing in fallback mode: {claim.payload.description}")
             result = f"Task {claim.payload.task_id} completed in fallback mode"
-            await task_queue.create_result(claim.event_id, result)
+            await task_queue.add_result(claim.event_id, result)
             logger.info("Event processed successfully in fallback mode")
         
         logger.info("Fallback demonstration completed!")
