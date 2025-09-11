@@ -32,30 +32,3 @@ class PickleSerializer(Serializer[T]):
             T: The unpickled object
         """
         return pickle.loads(data)
-
-
-
-def foo():
-    class Foo:
-        def get_value(self):
-            return 10
-    return Foo
-
-class AbstractBar:
-    pass
-
-@staticmethod
-def get_value():
-    return 10
-
-def bar():
-    return type("Bar", (AbstractBar,), {
-        "get_value": get_value
-    })
-
-        
-if __name__ == "__main__":
-    import pickle
-    a = bar()
-    print(a().get_value())
-    print(pickle.dumps(a()))

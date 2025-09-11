@@ -1,3 +1,21 @@
+"""
+FastAPI WebSocket Example for Eventy Queue System
+
+This example demonstrates how to integrate the eventy queue system with FastAPI
+to create a real-time WebSocket-based messaging application. The example:
+
+1. Sets up a FastAPI application with WebSocket support for real-time communication
+2. Creates a custom MyMsg dataclass for message payloads
+3. Implements a PrintSubscriber that logs received messages to the console
+4. Serves a static HTML page with WebSocket client functionality
+5. Allows users to send messages through a web interface and see them processed in real-time
+6. Uses a random port between 8000-9000 to avoid conflicts
+
+The web interface provides a simple form where users can type messages that are
+sent via WebSocket to the eventy queue system, processed by subscribers, and
+logged to the server console.
+"""
+
 from typing import Literal
 from pydantic import BaseModel
 import os
@@ -71,7 +89,7 @@ def main():
     print(f"🎲 Using random port: {random_port}")
     
     # Run main with this module's app
-    fastapi_main("fastapi_example:app")
+    fastapi_main("b_fastapi_example:app")
 
 
 if __name__ == "__main__":

@@ -37,6 +37,9 @@ class QueueManager(ABC):
     async def __aexit__(self, exc_type, exc_value, traceback):
         """Finish using this queue manager"""
 
+    async def reset(self, payload_type: type[T]):
+        """Clear all Events, Results and claims"""
+
 
 # Global cache for the default queue manager instance
 _default_queue_manager: Optional[QueueManager] = None

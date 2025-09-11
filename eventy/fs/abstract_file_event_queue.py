@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+import shutil
 from typing import TypeVar, Optional, AsyncIterator
 from uuid import UUID, uuid4
 
@@ -57,7 +58,7 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
     worker_id: UUID = field(default_factory=uuid4)
 
     # Event counter for generating sequential IDs
-    _next_event_id: int = field(default=1, init=False)
+    next_event_id: int = field(default=1, init=False)
 
     # Track the highest processed event ID to avoid duplicate processing
     processed_event_id: int = field(default=0, init=False)
@@ -99,7 +100,7 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
                 except ValueError:
                     # Skip files that aren't numeric
                     continue
-        self._next_event_id = max_id + 1
+        self.next_event_id = max_id + 1
 
     def _check_running(self):
         """Check if the queue is running and raise error if not"""
@@ -115,13 +116,19 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
         return self.payload_type
 
     async def publish(self, payload: T) -> QueueEvent[T]:
-        """Publish an event to this queue"""
+        """Publish an event to this queue
+        
+        When an event is published, it will be delivered to all subscribers.
+        For each subscriber that receives the event, an EventResult will be
+        created and stored to track whether the subscriber successfully
+        processed the event or encountered an error.
+        """
         self._check_running()
 
         # Try to create event with sequential ID, recalculating if file exists
         while True:
-            event_id = self._next_event_id
-            self._next_event_id += 1
+            event_id = self.next_event_id
+            self.next_event_id += 1
 
             event = QueueEvent(id=event_id, payload=payload)
 
@@ -488,16 +495,30 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
         subscriber_count = len(subscriptions)
 
         for subscription in subscriptions:
+            success = True
+            details = None
+            
             try:
                 await subscription.subscriber.on_event(event, self)
                 _LOGGER.debug(
                     f"Notified subscriber {subscription.id} about event {event.id}"
                 )
             except Exception as e:
+                success = False
+                details = str(e)
                 _LOGGER.error(
                     f"Error notifying subscriber {subscription.id} about event {event.id}: {e}",
                     exc_info=True,
                 )
+            
+            # Create and store the result
+            result = EventResult(
+                worker_id=self.worker_id,
+                event_id=event.id,
+                success=success,
+                details=details
+            )
+            await self._store_result(result)
 
         if subscriber_count > 0:
             _LOGGER.info(

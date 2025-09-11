@@ -15,6 +15,6 @@ class NonceSubscriber(Generic[T], Subscriber[T]):
 
     async def on_event(self, event: QueueEvent[T], event_queue: EventQueue[T]) -> None:
         claim_id = f"{event.id}_started"
-        claim_created = event_queue.create_claim(claim_id)
+        claim_created = await event_queue.create_claim(claim_id)
         if claim_created:
-            await self.subscriber.on_event(event)
+            await self.subscriber.on_event(event, event_queue)
