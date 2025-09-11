@@ -20,4 +20,6 @@ class NonceSubscriber(Generic[T], Subscriber[T]):
         if claim_created:
             await self.subscriber.on_event(event, event_queue)
         else:
-            raise SkipException(f"Event {event.id} is being skipped on worker {event_queue.get_worker_id()} - claim already exists")
+            raise SkipException(
+                f"Event {event.id} is being skipped on worker {event_queue.get_worker_id()} - claim already exists"
+            )
