@@ -20,7 +20,10 @@ from eventy.event_queue import EventQueue
 # Test subscriber implementations
 class StringSubscriber(Subscriber[str]):
     """Simple subscriber with string payload"""
-    async def on_event(self, event: QueueEvent[str], event_queue: EventQueue[str]) -> None:
+
+    async def on_event(
+        self, event: QueueEvent[str], event_queue: EventQueue[str]
+    ) -> None:
         pass
 
 
@@ -29,9 +32,31 @@ class InheritedSubscriber(StringSubscriber):
 
 
 class InheritedIntSubscriber(Subscriber[int]):
-    """Simple subscriber with string payload"""
-    async def on_event(self, event: QueueEvent[int], event_queue: EventQueue[int]) -> None:
+    """Simple subscriber with int payload"""
+
+    async def on_event(
+        self, event: QueueEvent[int], event_queue: EventQueue[int]
+    ) -> None:
         pass
+
+
+T = TypeVar("T")
+
+
+class GenericSubscriber(Subscriber[T]):
+    """Simple subscriber with generic payload"""
+
+    async def on_event(self, event: QueueEvent[T], event_queue: EventQueue[T]) -> None:
+        pass
+
+
+class InheritedGenericSubscriber(GenericSubscriber[float]):
+    async def on_event(self, event: QueueEvent[T], event_queue: EventQueue[T]) -> None:
+        pass
+
+
+class SecondLevelSubscriber(InheritedGenericSubscriber):
+    pass
 
 
 def test_get_payload_type():
@@ -39,3 +64,8 @@ def test_get_payload_type():
     assert get_payload_type(StringSubscriber) == str
     assert get_payload_type(InheritedIntSubscriber) == int
     assert get_payload_type(InheritedSubscriber) == str
+    assert get_payload_type(GenericSubscriber[bool]) == bool
+    assert get_payload_type(InheritedGenericSubscriber) == float
+    assert get_payload_type(SecondLevelSubscriber) == float
+    with pytest.raises(TypeError):
+        get_payload_type(int)

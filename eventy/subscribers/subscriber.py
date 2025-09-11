@@ -34,7 +34,7 @@ def get_payload_type(subscriber_type: type):
         return subscriber_payload_types[0]
 
     # Check if type is a class that extends Subscriber[PayloadType]
-    for base in subscriber_type.__orig_bases__:
+    for base in getattr(subscriber_type, "__orig_bases__", []):
         origin = get_origin(base)
         if origin is None and issubclass(base, Subscriber):
             return get_payload_type(base)
