@@ -27,7 +27,7 @@ Eventy uses a distributed protocol with several key components that work togethe
 
 - **Claims**: Represent a worker's claim on a specific event or resource. Claims prevent duplicate processing and enable coordination between distributed workers.
 
-- **Subscribers**: Define the logic for processing events. Subscribers are stateless components that receive events and perform the actual work.
+- **Subscribers**: Define the logic for processing events. Subscribers are stateless components that receive events and perform the actual work. A key point to remember is that subscribers are run for every event in every worker in the cluster.
 
 - **Workers**: Execute subscriber logic and manage the processing lifecycle. Each worker has a unique identifier that differentiates it from other workers in the system.
 
