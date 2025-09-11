@@ -24,6 +24,10 @@ server = [
 redis = [
     "redis>=4.0.0"
 ]
+sql = [
+    "sqlalchemy>=2.0.0",
+    "alembic>=1.13.0"
+]
 
 [tool.poetry]
 packages = [{include = "eventy"}]
