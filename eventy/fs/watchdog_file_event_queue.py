@@ -4,12 +4,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TypeVar
 
-try:
-    from watchdog.observers import Observer
-    from watchdog.events import FileSystemEventHandler
-except ImportError:
-    Observer = None
-    FileSystemEventHandler = None
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
 from eventy.fs.abstract_file_event_queue import AbstractFileEventQueue
 
@@ -17,73 +13,62 @@ T = TypeVar("T")
 _LOGGER = logging.getLogger(__name__)
 
 
-if FileSystemEventHandler is not None:
-    class EventFileHandler(FileSystemEventHandler):
-        """File system event handler for watchdog"""
+class EventFileHandler(FileSystemEventHandler):
+    """File system event handler for watchdog"""
 
-        def __init__(self, queue, loop: asyncio.AbstractEventLoop):
-            super().__init__()
-            self.queue = queue
-            self._pending_events = asyncio.Queue()
-            self.loop = loop
+    def __init__(self, queue, loop: asyncio.AbstractEventLoop):
+        super().__init__()
+        self.queue = queue
+        self._pending_events = asyncio.Queue()
+        self.loop = loop
 
-        def on_created(self, event):
-            """Handle file creation events"""
-            if not event.is_directory:
-                # Add to pending events queue for async processing
-                try:
-                    self.loop.call_soon_threadsafe(
-                        self._pending_events.put_nowait, event.src_path
-                    )
-                except RuntimeError:
-                    # If no event loop is running, log a warning
-                    _LOGGER.warning(
-                        f"No event loop running when trying to queue event: {event.src_path}"
-                    )
+    def on_created(self, event):
+        """Handle file creation events"""
+        if not event.is_directory:
+            # Add to pending events queue for async processing
+            try:
+                self.loop.call_soon_threadsafe(
+                    self._pending_events.put_nowait, event.src_path
+                )
+            except RuntimeError:
+                # If no event loop is running, log a warning
+                _LOGGER.warning(
+                    f"No event loop running when trying to queue event: {event.src_path}"
+                )
 
-        async def get_pending_event(self):
-            """Get the next pending event"""
-            return await self._pending_events.get()
+    async def get_pending_event(self):
+        """Get the next pending event"""
+        return await self._pending_events.get()
 
-        def has_pending_events(self):
-            """Check if there are pending events"""
-            return not self._pending_events.empty()
+    def has_pending_events(self):
+        """Check if there are pending events"""
+        return not self._pending_events.empty()
 
 
-    class SubscriptionFileHandler(FileSystemEventHandler):
-        """File system event handler for subscription directory"""
+class SubscriptionFileHandler(FileSystemEventHandler):
+    """File system event handler for subscription directory"""
 
-        def __init__(self, queue):
-            super().__init__()
-            self.queue = queue
+    def __init__(self, queue):
+        super().__init__()
+        self.queue = queue
 
-        def on_created(self, event):
-            """Handle subscription file creation"""
-            if not event.is_directory:
-                _LOGGER.debug(f"Subscription file created: {event.src_path}")
-                self.queue._mark_subscription_cache_dirty()  # pylint: disable=protected-access
+    def on_created(self, event):
+        """Handle subscription file creation"""
+        if not event.is_directory:
+            _LOGGER.debug(f"Subscription file created: {event.src_path}")
+            self.queue._mark_subscription_cache_dirty()  # pylint: disable=protected-access
 
-        def on_deleted(self, event):
-            """Handle subscription file deletion"""
-            if not event.is_directory:
-                _LOGGER.debug(f"Subscription file deleted: {event.src_path}")
-                self.queue._mark_subscription_cache_dirty()  # pylint: disable=protected-access
+    def on_deleted(self, event):
+        """Handle subscription file deletion"""
+        if not event.is_directory:
+            _LOGGER.debug(f"Subscription file deleted: {event.src_path}")
+            self.queue._mark_subscription_cache_dirty()  # pylint: disable=protected-access
 
-        def on_modified(self, event):
-            """Handle subscription file modification"""
-            if not event.is_directory:
-                _LOGGER.debug(f"Subscription file modified: {event.src_path}")
-                self.queue._mark_subscription_cache_dirty()  # pylint: disable=protected-access
-
-else:
-    # Fallback classes when watchdog is not available
-    class EventFileHandler:
-        """Dummy event handler when watchdog is not available"""
-        pass  # pylint: disable=unnecessary-pass
-
-    class SubscriptionFileHandler:
-        """Dummy subscription handler when watchdog is not available"""
-        pass  # pylint: disable=unnecessary-pass
+    def on_modified(self, event):
+        """Handle subscription file modification"""
+        if not event.is_directory:
+            _LOGGER.debug(f"Subscription file modified: {event.src_path}")
+            self.queue._mark_subscription_cache_dirty()  # pylint: disable=protected-access
 
 
 @dataclass
@@ -106,9 +91,6 @@ class WatchdogFileEventQueue(AbstractFileEventQueue[T]):
 
     async def __aenter__(self):
         """Start the watchdog event queue"""
-        if Observer is None:
-            raise ImportError("watchdog library is required for WatchdogFileEventQueue")
-        
         if self.running:
             return self
 
