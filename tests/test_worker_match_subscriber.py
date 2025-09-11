@@ -180,12 +180,18 @@ class TestWorkerMatchSubscriber:
 
     @pytest.mark.asyncio
     async def test_skip_exception_when_worker_id_does_not_match(
-        self, worker_match_subscriber, sample_event, different_worker_event_queue, mock_subscriber
+        self,
+        worker_match_subscriber,
+        sample_event,
+        different_worker_event_queue,
+        mock_subscriber,
     ):
         """Test that SkipException is raised when worker ID doesn't match"""
         # Act & Assert
         with pytest.raises(SkipException):
-            await worker_match_subscriber.on_event(sample_event, different_worker_event_queue)
+            await worker_match_subscriber.on_event(
+                sample_event, different_worker_event_queue
+            )
 
         # Verify the underlying subscriber was not called
         assert (
@@ -212,7 +218,9 @@ class TestWorkerMatchSubscriber:
         assert (
             len(mock_subscriber.received_events) == 3
         ), "All events should be processed"
-        assert mock_subscriber.call_count == 3, "Subscriber should be called three times"
+        assert (
+            mock_subscriber.call_count == 3
+        ), "Subscriber should be called three times"
         assert mock_subscriber.received_events[0] == event1
         assert mock_subscriber.received_events[1] == event2
         assert mock_subscriber.received_events[2] == event3
@@ -228,17 +236,17 @@ class TestWorkerMatchSubscriber:
         )
         matching_queue = MockEventQueue(worker_id=worker_id)
         non_matching_queue = MockEventQueue(worker_id=different_worker_id)
-        
+
         event1 = QueueEvent(id=1, payload="matching_event")
         event2 = QueueEvent(id=2, payload="non_matching_event")
         event3 = QueueEvent(id=3, payload="another_matching_event")
 
         # Act
         await worker_match_subscriber.on_event(event1, matching_queue)
-        
+
         with pytest.raises(SkipException):
             await worker_match_subscriber.on_event(event2, non_matching_queue)
-        
+
         await worker_match_subscriber.on_event(event3, matching_queue)
 
         # Assert
@@ -280,10 +288,10 @@ class TestWorkerMatchSubscriber:
         worker_match_subscriber = WorkerMatchSubscriber(
             subscriber=mock_subscriber, worker_id=worker_id
         )
-        
+
         matching_queue = MockEventQueue(worker_id=same_worker_id)
         non_matching_queue = MockEventQueue(worker_id=different_worker_id)
-        
+
         event = QueueEvent(id=1, payload="test")
 
         # Act & Assert - Same UUID should work
@@ -298,19 +306,35 @@ class TestWorkerMatchSubscriber:
     async def test_worker_match_subscriber_equality(self, mock_subscriber, worker_id):
         """Test WorkerMatchSubscriber equality behavior"""
         # Arrange
-        worker_match1 = WorkerMatchSubscriber(subscriber=mock_subscriber, worker_id=worker_id)
-        worker_match2 = WorkerMatchSubscriber(subscriber=mock_subscriber, worker_id=worker_id)
+        worker_match1 = WorkerMatchSubscriber(
+            subscriber=mock_subscriber, worker_id=worker_id
+        )
+        worker_match2 = WorkerMatchSubscriber(
+            subscriber=mock_subscriber, worker_id=worker_id
+        )
         different_subscriber = MockSubscriber("different")
-        worker_match3 = WorkerMatchSubscriber(subscriber=different_subscriber, worker_id=worker_id)
+        worker_match3 = WorkerMatchSubscriber(
+            subscriber=different_subscriber, worker_id=worker_id
+        )
         different_worker_id = uuid4()
-        worker_match4 = WorkerMatchSubscriber(subscriber=mock_subscriber, worker_id=different_worker_id)
+        worker_match4 = WorkerMatchSubscriber(
+            subscriber=mock_subscriber, worker_id=different_worker_id
+        )
 
         # Assert
-        assert worker_match1 == worker_match2, "WorkerMatchSubscribers with same subscriber and worker_id should be equal"
-        assert worker_match1 != worker_match3, "WorkerMatchSubscribers with different subscribers should not be equal"
-        assert worker_match1 != worker_match4, "WorkerMatchSubscribers with different worker_ids should not be equal"
+        assert (
+            worker_match1 == worker_match2
+        ), "WorkerMatchSubscribers with same subscriber and worker_id should be equal"
+        assert (
+            worker_match1 != worker_match3
+        ), "WorkerMatchSubscribers with different subscribers should not be equal"
+        assert (
+            worker_match1 != worker_match4
+        ), "WorkerMatchSubscribers with different worker_ids should not be equal"
 
-    def test_worker_match_subscriber_dataclass_properties(self, mock_subscriber, worker_id):
+    def test_worker_match_subscriber_dataclass_properties(
+        self, mock_subscriber, worker_id
+    ):
         """Test that WorkerMatchSubscriber is properly configured as a dataclass"""
         # Arrange & Act
         worker_match_subscriber = WorkerMatchSubscriber(
@@ -337,6 +361,7 @@ class TestWorkerMatchSubscriber:
     @pytest.mark.asyncio
     async def test_worker_id_none_handling(self, mock_subscriber):
         """Test behavior when event queue returns None for worker ID"""
+
         # Arrange
         class NoneWorkerIdQueue(MockEventQueue):
             def get_worker_id(self):
@@ -363,12 +388,12 @@ class TestWorkerMatchSubscriber:
         worker_match_subscriber = WorkerMatchSubscriber(
             subscriber=mock_subscriber, worker_id=worker_id
         )
-        
+
         # Create a queue that returns string representation of UUID
         class StringWorkerIdQueue(MockEventQueue):
             def __init__(self, worker_id_str):
                 self.worker_id_str = worker_id_str
-                
+
             def get_worker_id(self):
                 return self.worker_id_str
 
@@ -379,7 +404,9 @@ class TestWorkerMatchSubscriber:
         with pytest.raises(SkipException):
             await worker_match_subscriber.on_event(event, string_worker_queue)
 
-        assert mock_subscriber.call_count == 0, "Subscriber should not be called with string worker ID"
+        assert (
+            mock_subscriber.call_count == 0
+        ), "Subscriber should not be called with string worker ID"
 
 
 class TestWorkerMatchSubscriberIntegration:
@@ -400,8 +427,10 @@ class TestWorkerMatchSubscriberIntegration:
 
         async with MemoryEventQueue(payload_type=str) as event_queue:
             # The event queue will have a different worker ID than our subscriber expects
-            assert event_queue.get_worker_id() != specific_worker_id, "Worker IDs should be different"
-            
+            assert (
+                event_queue.get_worker_id() != specific_worker_id
+            ), "Worker IDs should be different"
+
             # Subscribe the worker match subscriber
             subscription = await event_queue.subscribe(worker_match_subscriber)
 
@@ -410,6 +439,7 @@ class TestWorkerMatchSubscriberIntegration:
 
             # Wait a bit for processing
             import asyncio
+
             await asyncio.sleep(0.1)
 
             # Get the results for this event
@@ -419,11 +449,17 @@ class TestWorkerMatchSubscriberIntegration:
             # Should have one failed result due to SkipException
             assert len(results) >= 1, "Should have at least one result"
             failed_result = results[0]
-            assert failed_result.success is False, "Processing should fail due to worker ID mismatch"
-            assert failed_result.event_id == event.id, "Result should be for the correct event"
+            assert (
+                failed_result.success is False
+            ), "Processing should fail due to worker ID mismatch"
+            assert (
+                failed_result.event_id == event.id
+            ), "Result should be for the correct event"
 
             # Verify the underlying subscriber was not called
-            assert len(mock_subscriber.received_events) == 0, "Subscriber should not receive the event"
+            assert (
+                len(mock_subscriber.received_events) == 0
+            ), "Subscriber should not receive the event"
             assert mock_subscriber.call_count == 0, "Subscriber should not be called"
 
     @pytest.mark.asyncio
@@ -449,6 +485,7 @@ class TestWorkerMatchSubscriberIntegration:
 
             # Wait a bit for processing
             import asyncio
+
             await asyncio.sleep(0.1)
 
             # Get the results for this event
@@ -460,11 +497,17 @@ class TestWorkerMatchSubscriberIntegration:
             result = results[0]
             assert result.success is True, "Processing should be successful"
             assert result.event_id == event.id, "Result should be for the correct event"
-            assert result.details is None, "Successful processing should have no error details"
+            assert (
+                result.details is None
+            ), "Successful processing should have no error details"
 
             # Verify the underlying subscriber was called
-            assert len(mock_subscriber.received_events) == 1, "Subscriber should receive the event"
-            assert mock_subscriber.received_events[0].id == event.id, "Subscriber should receive the correct event"
+            assert (
+                len(mock_subscriber.received_events) == 1
+            ), "Subscriber should receive the event"
+            assert (
+                mock_subscriber.received_events[0].id == event.id
+            ), "Subscriber should receive the correct event"
 
     @pytest.mark.asyncio
     async def test_multiple_workers_with_different_worker_ids(self):
@@ -474,10 +517,10 @@ class TestWorkerMatchSubscriberIntegration:
         # Arrange
         worker1_id = uuid4()
         worker2_id = uuid4()
-        
+
         mock_subscriber1 = MockSubscriber("worker1")
         mock_subscriber2 = MockSubscriber("worker2")
-        
+
         worker_match_subscriber1 = WorkerMatchSubscriber(
             subscriber=mock_subscriber1, worker_id=worker1_id
         )
@@ -495,6 +538,7 @@ class TestWorkerMatchSubscriberIntegration:
 
             # Wait a bit for processing
             import asyncio
+
             await asyncio.sleep(0.1)
 
             # Get the results for this event
@@ -503,14 +547,28 @@ class TestWorkerMatchSubscriberIntegration:
 
             # Both subscribers should fail due to worker ID mismatch
             # (the event queue has its own worker ID, different from both subscribers)
-            assert len(results) == 2, "Should have two results (one for each subscriber)"
-            
+            assert (
+                len(results) == 2
+            ), "Should have two results (one for each subscriber)"
+
             for result in results:
-                assert result.success is False, "Both results should fail due to worker ID mismatch"
-                assert result.event_id == event.id, "Results should be for the correct event"
+                assert (
+                    result.success is False
+                ), "Both results should fail due to worker ID mismatch"
+                assert (
+                    result.event_id == event.id
+                ), "Results should be for the correct event"
 
             # Verify neither underlying subscriber was called
-            assert len(mock_subscriber1.received_events) == 0, "First subscriber should not receive the event"
-            assert len(mock_subscriber2.received_events) == 0, "Second subscriber should not receive the event"
-            assert mock_subscriber1.call_count == 0, "First subscriber should not be called"
-            assert mock_subscriber2.call_count == 0, "Second subscriber should not be called"
+            assert (
+                len(mock_subscriber1.received_events) == 0
+            ), "First subscriber should not receive the event"
+            assert (
+                len(mock_subscriber2.received_events) == 0
+            ), "Second subscriber should not receive the event"
+            assert (
+                mock_subscriber1.call_count == 0
+            ), "First subscriber should not be called"
+            assert (
+                mock_subscriber2.call_count == 0
+            ), "Second subscriber should not be called"

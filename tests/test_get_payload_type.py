@@ -21,6 +21,7 @@ from eventy.fs.polling_file_event_queue import PollingFileEventQueue
 @dataclass
 class SimplePayload:
     """Simple dataclass for testing"""
+
     message: str
     value: int
 
@@ -28,6 +29,7 @@ class SimplePayload:
 @dataclass
 class ComplexPayload:
     """Complex dataclass with nested types"""
+
     id: UUID
     data: Dict[str, Any]
     items: List[str]
@@ -36,9 +38,10 @@ class ComplexPayload:
 
 class CustomClass:
     """Custom class for testing"""
+
     def __init__(self, name: str):
         self.name = name
-    
+
     def __eq__(self, other):
         return isinstance(other, CustomClass) and self.name == other.name
 
@@ -161,7 +164,7 @@ class TestGetPayloadType(unittest.IsolatedAsyncioTestCase):
             payload_type1 = queue.get_payload_type()
             payload_type2 = queue.get_payload_type()
             payload_type3 = queue.get_payload_type()
-            
+
             self.assertEqual(payload_type1, payload_type2)
             self.assertEqual(payload_type2, payload_type3)
             self.assertIs(payload_type1, payload_type2)
@@ -180,7 +183,7 @@ class TestGetPayloadType(unittest.IsolatedAsyncioTestCase):
         queue = MemoryEventQueue(payload_type=int)
         async with queue:
             pass  # Enter and exit context manager
-        
+
         # Should still work after exiting
         payload_type = queue.get_payload_type()
         self.assertEqual(payload_type, int)
@@ -191,16 +194,16 @@ class TestGetPayloadType(unittest.IsolatedAsyncioTestCase):
         queue1 = MemoryEventQueue(payload_type=str)
         queue2 = MemoryEventQueue(payload_type=int)
         queue3 = MemoryEventQueue(payload_type=SimplePayload)
-        
+
         async with queue1, queue2, queue3:
             payload_type1 = queue1.get_payload_type()
             payload_type2 = queue2.get_payload_type()
             payload_type3 = queue3.get_payload_type()
-            
+
             self.assertEqual(payload_type1, str)
             self.assertEqual(payload_type2, int)
             self.assertEqual(payload_type3, SimplePayload)
-            
+
             # Ensure they're different
             self.assertNotEqual(payload_type1, payload_type2)
             self.assertNotEqual(payload_type2, payload_type3)
@@ -228,30 +231,31 @@ class TestGetPayloadType(unittest.IsolatedAsyncioTestCase):
         async with queue:
             payload_type1 = queue.get_payload_type()
             payload_type2 = queue.get_payload_type()
-            
+
             # Should be the exact same object reference
             self.assertIs(payload_type1, payload_type2)
-            
+
             # Verify it's the actual str type, not a copy
             self.assertIs(payload_type1, str)
 
     async def test_get_payload_type_with_inheritance(self):
         """Test get_payload_type with class inheritance"""
+
         class BasePayload:
             def __init__(self, base_field: str):
                 self.base_field = base_field
-        
+
         class DerivedPayload(BasePayload):
             def __init__(self, base_field: str, derived_field: int):
                 super().__init__(base_field)
                 self.derived_field = derived_field
-        
+
         queue = MemoryEventQueue(payload_type=DerivedPayload)
         async with queue:
             payload_type = queue.get_payload_type()
             self.assertEqual(payload_type, DerivedPayload)
             self.assertIs(payload_type, DerivedPayload)
-            
+
             # Verify it's the derived class, not the base class
             self.assertNotEqual(payload_type, BasePayload)
 
@@ -266,23 +270,24 @@ class TestGetPayloadTypeMultipleImplementations(unittest.IsolatedAsyncioTestCase
     def tearDown(self):
         """Clean up temporary directory"""
         import shutil
+
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     async def test_get_payload_type_memory_vs_file_queue_consistency(self):
         """Test that MemoryEventQueue and PollingFileEventQueue return consistent payload types"""
         payload_type = str
-        
+
         memory_queue = MemoryEventQueue(payload_type=payload_type)
         file_queue = PollingFileEventQueue(
             payload_type=payload_type,
             root_dir=Path(self.temp_dir),
-            polling_interval=0.1
+            polling_interval=0.1,
         )
-        
+
         async with memory_queue, file_queue:
             memory_payload_type = memory_queue.get_payload_type()
             file_payload_type = file_queue.get_payload_type()
-            
+
             self.assertEqual(memory_payload_type, file_payload_type)
             self.assertEqual(memory_payload_type, payload_type)
             self.assertEqual(file_payload_type, payload_type)
@@ -295,13 +300,13 @@ class TestGetPayloadTypeMultipleImplementations(unittest.IsolatedAsyncioTestCase
         file_queue = PollingFileEventQueue(
             payload_type=SimplePayload,
             root_dir=Path(self.temp_dir),
-            polling_interval=0.1
+            polling_interval=0.1,
         )
-        
+
         async with memory_queue, file_queue:
             memory_payload_type = memory_queue.get_payload_type()
             file_payload_type = file_queue.get_payload_type()
-            
+
             self.assertEqual(memory_payload_type, int)
             self.assertEqual(file_payload_type, SimplePayload)
             self.assertNotEqual(memory_payload_type, file_payload_type)
@@ -309,18 +314,18 @@ class TestGetPayloadTypeMultipleImplementations(unittest.IsolatedAsyncioTestCase
     async def test_get_payload_type_complex_types_across_implementations(self):
         """Test complex payload types work consistently across implementations"""
         complex_type = Dict[str, List[int]]
-        
+
         memory_queue = MemoryEventQueue(payload_type=complex_type)
         file_queue = PollingFileEventQueue(
             payload_type=complex_type,
             root_dir=Path(self.temp_dir),
-            polling_interval=0.1
+            polling_interval=0.1,
         )
-        
+
         async with memory_queue, file_queue:
             memory_payload_type = memory_queue.get_payload_type()
             file_payload_type = file_queue.get_payload_type()
-            
+
             self.assertEqual(memory_payload_type, complex_type)
             self.assertEqual(file_payload_type, complex_type)
             self.assertEqual(memory_payload_type, file_payload_type)
@@ -329,15 +334,13 @@ class TestGetPayloadTypeMultipleImplementations(unittest.IsolatedAsyncioTestCase
         """Test custom class payload types work consistently across implementations"""
         memory_queue = MemoryEventQueue(payload_type=CustomClass)
         file_queue = PollingFileEventQueue(
-            payload_type=CustomClass,
-            root_dir=Path(self.temp_dir),
-            polling_interval=0.1
+            payload_type=CustomClass, root_dir=Path(self.temp_dir), polling_interval=0.1
         )
-        
+
         async with memory_queue, file_queue:
             memory_payload_type = memory_queue.get_payload_type()
             file_payload_type = file_queue.get_payload_type()
-            
+
             self.assertEqual(memory_payload_type, CustomClass)
             self.assertEqual(file_payload_type, CustomClass)
             self.assertEqual(memory_payload_type, file_payload_type)
@@ -349,25 +352,25 @@ class TestGetPayloadTypeMultipleImplementations(unittest.IsolatedAsyncioTestCase
         queue1 = MemoryEventQueue(payload_type=str)
         queue2 = MemoryEventQueue(payload_type=int)
         queue3 = MemoryEventQueue(payload_type=SimplePayload)
-        
+
         # Test before entering context managers
         self.assertEqual(queue1.get_payload_type(), str)
         self.assertEqual(queue2.get_payload_type(), int)
         self.assertEqual(queue3.get_payload_type(), SimplePayload)
-        
+
         async with queue1, queue2, queue3:
             # Test within context managers
             self.assertEqual(queue1.get_payload_type(), str)
             self.assertEqual(queue2.get_payload_type(), int)
             self.assertEqual(queue3.get_payload_type(), SimplePayload)
-            
+
             # Ensure they're all different
             payload_types = [
                 queue1.get_payload_type(),
                 queue2.get_payload_type(),
-                queue3.get_payload_type()
+                queue3.get_payload_type(),
             ]
-            
+
             # All should be different
             self.assertEqual(len(set(payload_types)), 3)
 
@@ -380,22 +383,22 @@ class TestGetPayloadTypeMultipleImplementations(unittest.IsolatedAsyncioTestCase
             SimplePayload,
             Dict[str, int],
             List[str],
-            Optional[int]
+            Optional[int],
         ]
-        
+
         for payload_type in test_cases:
             with self.subTest(payload_type=payload_type):
                 memory_queue = MemoryEventQueue(payload_type=payload_type)
                 file_queue = PollingFileEventQueue(
                     payload_type=payload_type,
                     root_dir=Path(self.temp_dir),
-                    polling_interval=0.1
+                    polling_interval=0.1,
                 )
-                
+
                 async with memory_queue, file_queue:
                     memory_result = memory_queue.get_payload_type()
                     file_result = file_queue.get_payload_type()
-                    
+
                     # Both should return the same type
                     self.assertEqual(memory_result, payload_type)
                     self.assertEqual(file_result, payload_type)

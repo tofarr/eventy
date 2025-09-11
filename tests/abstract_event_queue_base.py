@@ -599,9 +599,7 @@ class AbstractEventQueueTestBase(Generic[T], unittest.IsolatedAsyncioTestCase, A
 
         # Search with date filter and pagination
         first_page = await self.queue.search_events(
-            limit=3,
-            created_at__gte=past,
-            created_at__lte=future
+            limit=3, created_at__gte=past, created_at__lte=future
         )
         self.assertIsInstance(first_page, Page)
         self.assertLessEqual(len(first_page.items), 3)
@@ -615,7 +613,7 @@ class AbstractEventQueueTestBase(Generic[T], unittest.IsolatedAsyncioTestCase, A
             elif event_time.tzinfo is not None and past.tzinfo is None:
                 past = past.replace(tzinfo=event_time.tzinfo)
                 future = future.replace(tzinfo=event_time.tzinfo)
-            
+
             self.assertGreaterEqual(event_time, past)
             self.assertLessEqual(event_time, future)
 
@@ -625,7 +623,7 @@ class AbstractEventQueueTestBase(Generic[T], unittest.IsolatedAsyncioTestCase, A
                 page_id=first_page.next_page_id,
                 limit=3,
                 created_at__gte=past,
-                created_at__lte=future
+                created_at__lte=future,
             )
             self.assertIsInstance(second_page, Page)
 
@@ -642,7 +640,7 @@ class AbstractEventQueueTestBase(Generic[T], unittest.IsolatedAsyncioTestCase, A
                 elif event_time.tzinfo is not None and past.tzinfo is None:
                     past = past.replace(tzinfo=event_time.tzinfo)
                     future = future.replace(tzinfo=event_time.tzinfo)
-                
+
                 self.assertGreaterEqual(event_time, past)
                 self.assertLessEqual(event_time, future)
 
@@ -686,11 +684,8 @@ class AbstractEventQueueTestBase(Generic[T], unittest.IsolatedAsyncioTestCase, A
     async def test_search_results_with_worker_id_filter(self):
         """Test searching results with worker ID filter"""
         worker_id = self.queue.get_worker_id()
-        
-        page = await self.queue.search_results(
-            worker_id__eq=worker_id,
-            limit=5
-        )
+
+        page = await self.queue.search_results(worker_id__eq=worker_id, limit=5)
         self.assertIsInstance(page, Page)
 
         # Verify all results match the worker ID filter (if any exist)
@@ -700,12 +695,10 @@ class AbstractEventQueueTestBase(Generic[T], unittest.IsolatedAsyncioTestCase, A
         # Test second page if available
         if page.next_page_id:
             second_page = await self.queue.search_results(
-                page_id=page.next_page_id,
-                worker_id__eq=worker_id,
-                limit=5
+                page_id=page.next_page_id, worker_id__eq=worker_id, limit=5
             )
             self.assertIsInstance(second_page, Page)
-            
+
             for result in second_page.items:
                 self.assertEqual(result.worker_id, worker_id)
 
@@ -721,10 +714,7 @@ class AbstractEventQueueTestBase(Generic[T], unittest.IsolatedAsyncioTestCase, A
             claim_ids.append(claim_id)
 
         # Search with worker filter and pagination
-        first_page = await self.queue.search_claims(
-            worker_id__eq=worker_id,
-            limit=3
-        )
+        first_page = await self.queue.search_claims(worker_id__eq=worker_id, limit=3)
         self.assertIsInstance(first_page, Page)
         self.assertLessEqual(len(first_page.items), 3)
 
@@ -735,9 +725,7 @@ class AbstractEventQueueTestBase(Generic[T], unittest.IsolatedAsyncioTestCase, A
         if first_page.next_page_id:
             # Get second page with same filter
             second_page = await self.queue.search_claims(
-                page_id=first_page.next_page_id,
-                worker_id__eq=worker_id,
-                limit=3
+                page_id=first_page.next_page_id, worker_id__eq=worker_id, limit=3
             )
             self.assertIsInstance(second_page, Page)
 
@@ -762,9 +750,7 @@ class AbstractEventQueueTestBase(Generic[T], unittest.IsolatedAsyncioTestCase, A
 
         # Search with date filter and pagination
         first_page = await self.queue.search_claims(
-            created_at__gte=past,
-            created_at__lte=future,
-            limit=2
+            created_at__gte=past, created_at__lte=future, limit=2
         )
         self.assertIsInstance(first_page, Page)
         self.assertLessEqual(len(first_page.items), 2)
@@ -778,7 +764,7 @@ class AbstractEventQueueTestBase(Generic[T], unittest.IsolatedAsyncioTestCase, A
             elif claim_time.tzinfo is not None and past.tzinfo is None:
                 past = past.replace(tzinfo=claim_time.tzinfo)
                 future = future.replace(tzinfo=claim_time.tzinfo)
-            
+
             self.assertGreaterEqual(claim_time, past)
             self.assertLessEqual(claim_time, future)
 
@@ -787,7 +773,7 @@ class AbstractEventQueueTestBase(Generic[T], unittest.IsolatedAsyncioTestCase, A
                 page_id=first_page.next_page_id,
                 created_at__gte=past,
                 created_at__lte=future,
-                limit=2
+                limit=2,
             )
             self.assertIsInstance(second_page, Page)
 
@@ -800,7 +786,7 @@ class AbstractEventQueueTestBase(Generic[T], unittest.IsolatedAsyncioTestCase, A
                 elif claim_time.tzinfo is not None and past.tzinfo is None:
                     past = past.replace(tzinfo=claim_time.tzinfo)
                     future = future.replace(tzinfo=claim_time.tzinfo)
-                
+
                 self.assertGreaterEqual(claim_time, past)
                 self.assertLessEqual(claim_time, future)
 
@@ -824,9 +810,7 @@ class AbstractEventQueueTestBase(Generic[T], unittest.IsolatedAsyncioTestCase, A
 
         # Search with tight date boundaries
         page = await self.queue.search_events(
-            created_at__gte=start_time,
-            created_at__lte=end_time,
-            limit=2
+            created_at__gte=start_time, created_at__lte=end_time, limit=2
         )
         self.assertIsInstance(page, Page)
 
@@ -839,7 +823,7 @@ class AbstractEventQueueTestBase(Generic[T], unittest.IsolatedAsyncioTestCase, A
             elif event_time.tzinfo is not None and start_time.tzinfo is None:
                 start_time = start_time.replace(tzinfo=event_time.tzinfo)
                 end_time = end_time.replace(tzinfo=event_time.tzinfo)
-            
+
             self.assertGreaterEqual(event_time, start_time)
             self.assertLessEqual(event_time, end_time)
 
@@ -849,7 +833,7 @@ class AbstractEventQueueTestBase(Generic[T], unittest.IsolatedAsyncioTestCase, A
                 page_id=page.next_page_id,
                 created_at__gte=start_time,
                 created_at__lte=end_time,
-                limit=2
+                limit=2,
             )
             for event in next_page.items:
                 # Handle timezone-aware vs timezone-naive datetime comparison
@@ -859,7 +843,7 @@ class AbstractEventQueueTestBase(Generic[T], unittest.IsolatedAsyncioTestCase, A
                 elif event_time.tzinfo is not None and start_time.tzinfo is None:
                     start_time = start_time.replace(tzinfo=event_time.tzinfo)
                     end_time = end_time.replace(tzinfo=event_time.tzinfo)
-                
+
                 self.assertGreaterEqual(event_time, start_time)
                 self.assertLessEqual(event_time, end_time)
 
@@ -880,7 +864,7 @@ class AbstractEventQueueTestBase(Generic[T], unittest.IsolatedAsyncioTestCase, A
             worker_id__eq=worker_id,
             created_at__gte=past,
             created_at__lte=future,
-            limit=3
+            limit=3,
         )
         self.assertIsInstance(page, Page)
 
@@ -894,7 +878,7 @@ class AbstractEventQueueTestBase(Generic[T], unittest.IsolatedAsyncioTestCase, A
             elif claim_time.tzinfo is not None and past.tzinfo is None:
                 past = past.replace(tzinfo=claim_time.tzinfo)
                 future = future.replace(tzinfo=claim_time.tzinfo)
-            
+
             self.assertGreaterEqual(claim_time, past)
             self.assertLessEqual(claim_time, future)
 
@@ -905,9 +889,9 @@ class AbstractEventQueueTestBase(Generic[T], unittest.IsolatedAsyncioTestCase, A
                 worker_id__eq=worker_id,
                 created_at__gte=past,
                 created_at__lte=future,
-                limit=3
+                limit=3,
             )
-            
+
             for claim in second_page.items:
                 self.assertEqual(claim.worker_id, worker_id)
                 # Handle timezone-aware vs timezone-naive datetime comparison
@@ -917,7 +901,7 @@ class AbstractEventQueueTestBase(Generic[T], unittest.IsolatedAsyncioTestCase, A
                 elif claim_time.tzinfo is not None and past.tzinfo is None:
                     past = past.replace(tzinfo=claim_time.tzinfo)
                     future = future.replace(tzinfo=claim_time.tzinfo)
-                
+
                 self.assertGreaterEqual(claim_time, past)
                 self.assertLessEqual(claim_time, future)
 
@@ -925,20 +909,14 @@ class AbstractEventQueueTestBase(Generic[T], unittest.IsolatedAsyncioTestCase, A
         """Test handling of empty pages in pagination"""
         # Search with filters that might return no results
         future_time = datetime.now(UTC) + timedelta(days=1)
-        
-        page = await self.queue.search_events(
-            created_at__gte=future_time,
-            limit=5
-        )
+
+        page = await self.queue.search_events(created_at__gte=future_time, limit=5)
         self.assertIsInstance(page, Page)
         self.assertEqual(len(page.items), 0)
         self.assertIsNone(page.next_page_id)
 
         # Same test for claims
-        page = await self.queue.search_claims(
-            created_at__gte=future_time,
-            limit=5
-        )
+        page = await self.queue.search_claims(created_at__gte=future_time, limit=5)
         self.assertIsInstance(page, Page)
         self.assertEqual(len(page.items), 0)
         self.assertIsNone(page.next_page_id)

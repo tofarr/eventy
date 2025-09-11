@@ -16,6 +16,7 @@ from eventy.serializers.serializer import get_default_serializer
 @dataclass
 class MockPayload:
     """Test payload for file queue manager tests."""
+
     message: str
     value: int = 42
 
@@ -23,6 +24,7 @@ class MockPayload:
 @dataclass
 class AnotherPayload:
     """Another test payload for testing multiple payload types."""
+
     name: str
     count: int = 0
 
@@ -54,7 +56,7 @@ class TestFileQueueManager:
             manager = FileQueueManager(
                 root_dir=temp_dir,
                 serializer=get_default_serializer(),
-                polling_interval=1.5
+                polling_interval=1.5,
             )
 
             assert manager.root_dir == Path(temp_dir)
@@ -72,7 +74,7 @@ class TestFileQueueManager:
         temp_dir = tempfile.mkdtemp()
         try:
             manager = FileQueueManager(root_dir=temp_dir)  # String path
-            
+
             assert manager.root_dir == Path(temp_dir)
             assert manager.root_dir.exists()
         finally:
@@ -85,16 +87,16 @@ class TestFileQueueManager:
         try:
             # Create manager and check that watchdog detection works
             manager = FileQueueManager(root_dir=temp_dir)
-            
+
             # The _use_watchdog should be set based on actual watchdog availability
             # Since watchdog is available in this environment, it should be True
             assert manager._use_watchdog is not None
             assert isinstance(manager._use_watchdog, bool)
-            
+
             # Test manual override
             manager._use_watchdog = False
             assert manager._use_watchdog is False
-            
+
             manager._use_watchdog = True
             assert manager._use_watchdog is True
         finally:
@@ -105,7 +107,7 @@ class TestFileQueueManager:
         """Test context manager functionality"""
         manager = self.create_file_queue_manager()
         temp_dir = manager.root_dir
-        
+
         try:
             assert not manager._entered
 
@@ -122,11 +124,11 @@ class TestFileQueueManager:
         """Test context manager with pre-registered queues"""
         manager = self.create_file_queue_manager()
         temp_dir = manager.root_dir
-        
+
         try:
             # Register a queue before entering context
             await manager.register(MockPayload)
-            
+
             # Mock the queue's context manager methods
             mock_queue = manager._queues[MockPayload]
             mock_queue.__aenter__ = AsyncMock(return_value=mock_queue)
@@ -149,7 +151,7 @@ class TestFileQueueManager:
         """Test that operations require entering the context manager"""
         manager = self.create_file_queue_manager()
         temp_dir = manager.root_dir
-        
+
         try:
             with pytest.raises(
                 EventyError, match="must be entered using async context manager"
@@ -173,13 +175,13 @@ class TestFileQueueManager:
         """Test creating a polling queue when watchdog is not available"""
         manager = self.create_file_queue_manager()
         temp_dir = manager.root_dir
-        
+
         try:
             # Force polling queue usage
             manager._use_watchdog = False
-            
+
             queue = manager._create_queue(MockPayload)
-            
+
             assert isinstance(queue, PollingFileEventQueue)
             assert queue.payload_type == MockPayload
             assert queue.polling_interval == manager.polling_interval
@@ -192,23 +194,27 @@ class TestFileQueueManager:
         """Test fallback to polling queue when watchdog import fails"""
         manager = self.create_file_queue_manager()
         temp_dir = manager.root_dir
-        
+
         try:
             # Force watchdog usage but make import fail
             manager._use_watchdog = True
-            
+
             # Mock the dynamic import to fail
-            with patch('builtins.__import__') as mock_import:
+            with patch("builtins.__import__") as mock_import:
+
                 def side_effect(name, *args, **kwargs):
-                    if name == 'eventy.fs.watchdog_file_event_queue':
+                    if name == "eventy.fs.watchdog_file_event_queue":
                         raise ImportError("Test import error")
                     return __import__(name, *args, **kwargs)
+
                 mock_import.side_effect = side_effect
-                
+
                 queue = manager._create_queue(MockPayload)
-                
+
                 assert isinstance(queue, PollingFileEventQueue)
-                assert manager._use_watchdog is False  # Should be set to False after failure
+                assert (
+                    manager._use_watchdog is False
+                )  # Should be set to False after failure
         finally:
             shutil.rmtree(temp_dir)
 
@@ -217,29 +223,31 @@ class TestFileQueueManager:
         """Test creating a watchdog queue when available"""
         manager = self.create_file_queue_manager()
         temp_dir = manager.root_dir
-        
+
         try:
             # Force watchdog usage
             manager._use_watchdog = True
-            
+
             # Mock WatchdogFileEventQueue class
             mock_watchdog_class = MagicMock()
             mock_watchdog_queue = MagicMock()
             mock_watchdog_queue.payload_type = MockPayload
             mock_watchdog_class.return_value = mock_watchdog_queue
-            
+
             # Mock the dynamic import to return our mock class
-            with patch('builtins.__import__') as mock_import:
+            with patch("builtins.__import__") as mock_import:
+
                 def side_effect(name, *args, **kwargs):
-                    if name == 'eventy.fs.watchdog_file_event_queue':
+                    if name == "eventy.fs.watchdog_file_event_queue":
                         mock_module = MagicMock()
                         mock_module.WatchdogFileEventQueue = mock_watchdog_class
                         return mock_module
                     return __import__(name, *args, **kwargs)
+
                 mock_import.side_effect = side_effect
-                
+
                 queue = manager._create_queue(MockPayload)
-                
+
                 assert queue is mock_watchdog_queue
                 mock_watchdog_class.assert_called_once_with(
                     root_dir=manager.root_dir / MockPayload.__name__,
@@ -257,11 +265,11 @@ class TestFileQueueManager:
         """Test registering a payload type and getting the queue"""
         manager = self.create_file_queue_manager()
         temp_dir = manager.root_dir
-        
+
         try:
             # Force polling queue usage to make test predictable
             manager._use_watchdog = False
-            
+
             async with manager:
                 # Register a payload type
                 await manager.register(MockPayload)
@@ -271,7 +279,7 @@ class TestFileQueueManager:
                 queue = await manager.get_event_queue(MockPayload)
                 assert isinstance(queue, PollingFileEventQueue)
                 assert queue.payload_type == MockPayload
-                
+
                 # Check that queue directory was created
                 queue_dir = manager.root_dir / MockPayload.__name__
                 assert queue_dir.exists()
@@ -283,7 +291,7 @@ class TestFileQueueManager:
         """Test registering the same payload type twice"""
         manager = self.create_file_queue_manager()
         temp_dir = manager.root_dir
-        
+
         try:
             async with manager:
                 # Register once
@@ -301,7 +309,7 @@ class TestFileQueueManager:
         """Test registering multiple different payload types"""
         manager = self.create_file_queue_manager()
         temp_dir = manager.root_dir
-        
+
         try:
             async with manager:
                 await manager.register(MockPayload)
@@ -316,7 +324,7 @@ class TestFileQueueManager:
                 assert mock_queue.payload_type == MockPayload
                 assert another_queue.payload_type == AnotherPayload
                 assert mock_queue is not another_queue
-                
+
                 # Check that separate directories were created
                 assert (manager.root_dir / MockPayload.__name__).exists()
                 assert (manager.root_dir / AnotherPayload.__name__).exists()
@@ -328,7 +336,7 @@ class TestFileQueueManager:
         """Test registering a payload type before entering context manager"""
         manager = self.create_file_queue_manager()
         temp_dir = manager.root_dir
-        
+
         try:
             # Register before entering context
             await manager.register(MockPayload)
@@ -350,7 +358,7 @@ class TestFileQueueManager:
         """Test getting list of registered queue types"""
         manager = self.create_file_queue_manager()
         temp_dir = manager.root_dir
-        
+
         try:
             async with manager:
                 # Initially empty
@@ -371,7 +379,7 @@ class TestFileQueueManager:
         """Test deregistering a payload type"""
         manager = self.create_file_queue_manager()
         temp_dir = manager.root_dir
-        
+
         try:
             async with manager:
                 # Register and then deregister
@@ -393,7 +401,7 @@ class TestFileQueueManager:
         """Test deregistering a non-existent payload type"""
         manager = self.create_file_queue_manager()
         temp_dir = manager.root_dir
-        
+
         try:
             async with manager:
                 # Should not raise error, just log warning
@@ -406,14 +414,16 @@ class TestFileQueueManager:
         """Test deregistering when queue.__aexit__ raises exception"""
         manager = self.create_file_queue_manager()
         temp_dir = manager.root_dir
-        
+
         try:
             async with manager:
                 await manager.register(MockPayload)
-                
+
                 # Mock the queue's __aexit__ to raise an exception
                 mock_queue = manager._queues[MockPayload]
-                mock_queue.__aexit__ = AsyncMock(side_effect=Exception("Test exception"))
+                mock_queue.__aexit__ = AsyncMock(
+                    side_effect=Exception("Test exception")
+                )
 
                 # Should not raise exception, just log warning
                 await manager.deregister(MockPayload)
@@ -426,7 +436,7 @@ class TestFileQueueManager:
         """Test getting a queue for unregistered payload type"""
         manager = self.create_file_queue_manager()
         temp_dir = manager.root_dir
-        
+
         try:
             async with manager:
                 with pytest.raises(
@@ -441,33 +451,33 @@ class TestFileQueueManager:
         """Test resetting a queue"""
         manager = self.create_file_queue_manager()
         temp_dir = manager.root_dir
-        
+
         try:
             async with manager:
                 await manager.register(MockPayload)
                 queue = manager._queues[MockPayload]
-                
+
                 # Create some mock directories and files
                 queue.events_dir = manager.root_dir / MockPayload.__name__ / "events"
                 queue.results_dir = manager.root_dir / MockPayload.__name__ / "results"
                 queue.claims_dir = manager.root_dir / MockPayload.__name__ / "claims"
-                
+
                 queue.events_dir.mkdir(parents=True, exist_ok=True)
                 queue.results_dir.mkdir(parents=True, exist_ok=True)
                 queue.claims_dir.mkdir(parents=True, exist_ok=True)
-                
+
                 # Create some test files
                 (queue.events_dir / "test_event.json").write_text("test")
                 (queue.results_dir / "test_result.json").write_text("test")
                 (queue.claims_dir / "test_claim.json").write_text("test")
-                
+
                 # Set some state
                 queue.processed_event_id = 5
                 queue.next_event_id = 10
 
                 # Reset should remove directories and reset state
                 await manager.reset(MockPayload)
-                
+
                 assert not queue.events_dir.exists()
                 assert not queue.results_dir.exists()
                 assert not queue.claims_dir.exists()
@@ -483,9 +493,7 @@ class TestFileQueueManager:
         try:
             custom_serializer = get_default_serializer()
             manager = FileQueueManager(
-                root_dir=temp_dir,
-                serializer=custom_serializer,
-                polling_interval=0.5
+                root_dir=temp_dir, serializer=custom_serializer, polling_interval=0.5
             )
 
             assert manager.serializer is custom_serializer
@@ -506,7 +514,7 @@ class TestFileQueueManager:
         """Test that different payload types have isolated queues and directories"""
         manager = self.create_file_queue_manager()
         temp_dir = manager.root_dir
-        
+
         try:
             async with manager:
                 await manager.register(MockPayload)
@@ -518,11 +526,13 @@ class TestFileQueueManager:
                 # Queues should be completely separate instances
                 assert mock_queue is not another_queue
                 assert mock_queue.payload_type != another_queue.payload_type
-                
+
                 # Should have separate directories
                 assert mock_queue.root_dir != another_queue.root_dir
                 assert mock_queue.root_dir == manager.root_dir / MockPayload.__name__
-                assert another_queue.root_dir == manager.root_dir / AnotherPayload.__name__
+                assert (
+                    another_queue.root_dir == manager.root_dir / AnotherPayload.__name__
+                )
         finally:
             shutil.rmtree(temp_dir)
 
@@ -530,11 +540,12 @@ class TestFileQueueManager:
     async def test_concurrent_operations(self):
         """Test concurrent registration and deregistration"""
         import asyncio
-        
+
         manager = self.create_file_queue_manager()
         temp_dir = manager.root_dir
-        
+
         try:
+
             async def register_payload(payload_type):
                 await manager.register(payload_type)
 
@@ -544,8 +555,7 @@ class TestFileQueueManager:
             async with manager:
                 # Concurrent registration
                 await asyncio.gather(
-                    register_payload(MockPayload),
-                    register_payload(AnotherPayload)
+                    register_payload(MockPayload), register_payload(AnotherPayload)
                 )
 
                 assert MockPayload in manager._queues
@@ -557,8 +567,7 @@ class TestFileQueueManager:
 
                 # Concurrent deregistration
                 await asyncio.gather(
-                    deregister_payload(MockPayload),
-                    deregister_payload(AnotherPayload)
+                    deregister_payload(MockPayload), deregister_payload(AnotherPayload)
                 )
 
                 assert MockPayload not in manager._queues
@@ -574,13 +583,13 @@ class TestFileQueueManager:
             # Test with non-existent directory
             non_existent_dir = Path(temp_dir) / "non_existent"
             manager = FileQueueManager(root_dir=non_existent_dir)
-            
+
             # Directory should be created during initialization
             assert non_existent_dir.exists()
-            
+
             async with manager:
                 await manager.register(MockPayload)
-                
+
                 # Queue-specific directory should be created
                 queue_dir = non_existent_dir / MockPayload.__name__
                 queue = await manager.get_event_queue(MockPayload)
@@ -593,7 +602,7 @@ class TestFileQueueManager:
         """Test that manager state remains consistent across operations"""
         manager = self.create_file_queue_manager()
         temp_dir = manager.root_dir
-        
+
         try:
             # Test state before entering
             assert not manager._entered
@@ -606,7 +615,7 @@ class TestFileQueueManager:
                 # Register some queues
                 await manager.register(MockPayload)
                 await manager.register(AnotherPayload)
-                
+
                 assert len(manager._queues) == 2
                 types = await manager.get_queue_types()
                 assert len(types) == 2
@@ -614,10 +623,10 @@ class TestFileQueueManager:
                 # Deregister one
                 mock_queue = manager._queues[MockPayload]
                 mock_queue.__aexit__ = AsyncMock(return_value=None)
-                
+
                 await manager.deregister(MockPayload)
                 assert len(manager._queues) == 1
-                
+
                 types = await manager.get_queue_types()
                 assert len(types) == 1
                 assert AnotherPayload in types
@@ -635,17 +644,16 @@ class TestFileQueueManager:
         try:
             custom_interval = 2.5
             manager = FileQueueManager(
-                root_dir=temp_dir,
-                polling_interval=custom_interval
+                root_dir=temp_dir, polling_interval=custom_interval
             )
-            
+
             # Force polling queue usage
             manager._use_watchdog = False
-            
+
             async with manager:
                 await manager.register(MockPayload)
                 queue = await manager.get_event_queue(MockPayload)
-                
+
                 assert isinstance(queue, PollingFileEventQueue)
                 assert queue.polling_interval == custom_interval
         finally:

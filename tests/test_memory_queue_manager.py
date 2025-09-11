@@ -13,6 +13,7 @@ from eventy.serializers.serializer import get_default_serializer
 @dataclass
 class MockPayload:
     """Test payload for memory queue manager tests."""
+
     message: str
     value: int = 42
 
@@ -20,6 +21,7 @@ class MockPayload:
 @dataclass
 class AnotherPayload:
     """Another test payload for testing multiple payload types."""
+
     name: str
     count: int = 0
 
@@ -63,7 +65,7 @@ class TestMemoryQueueManager:
 
         # Register a queue before entering context
         await manager.register(MockPayload)
-        
+
         # Mock the queue's context manager methods
         mock_queue = manager._queues[MockPayload]
         mock_queue.__aenter__ = AsyncMock(return_value=mock_queue)
@@ -216,7 +218,7 @@ class TestMemoryQueueManager:
 
         async with manager:
             await manager.register(MockPayload)
-            
+
             # Mock the queue's __aexit__ to raise an exception
             mock_queue = manager._queues[MockPayload]
             mock_queue.__aexit__ = AsyncMock(side_effect=Exception("Test exception"))
@@ -296,7 +298,7 @@ class TestMemoryQueueManager:
     async def test_concurrent_operations(self):
         """Test concurrent registration and deregistration"""
         import asyncio
-        
+
         manager = self.create_memory_queue_manager()
 
         async def register_payload(payload_type):
@@ -308,8 +310,7 @@ class TestMemoryQueueManager:
         async with manager:
             # Concurrent registration
             await asyncio.gather(
-                register_payload(MockPayload),
-                register_payload(AnotherPayload)
+                register_payload(MockPayload), register_payload(AnotherPayload)
             )
 
             assert MockPayload in manager._queues
@@ -321,8 +322,7 @@ class TestMemoryQueueManager:
 
             # Concurrent deregistration
             await asyncio.gather(
-                deregister_payload(MockPayload),
-                deregister_payload(AnotherPayload)
+                deregister_payload(MockPayload), deregister_payload(AnotherPayload)
             )
 
             assert MockPayload not in manager._queues
@@ -344,7 +344,7 @@ class TestMemoryQueueManager:
             # Register some queues
             await manager.register(MockPayload)
             await manager.register(AnotherPayload)
-            
+
             assert len(manager._queues) == 2
             types = await manager.get_queue_types()
             assert len(types) == 2
@@ -352,10 +352,10 @@ class TestMemoryQueueManager:
             # Deregister one
             mock_queue = manager._queues[MockPayload]
             mock_queue.__aexit__ = AsyncMock(return_value=None)
-            
+
             await manager.deregister(MockPayload)
             assert len(manager._queues) == 1
-            
+
             types = await manager.get_queue_types()
             assert len(types) == 1
             assert AnotherPayload in types
