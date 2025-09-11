@@ -4,7 +4,6 @@ Unit tests for EventyConfig get_config and set_config functions.
 This module tests the global configuration management functionality.
 """
 
-import pytest
 from unittest.mock import patch
 
 from eventy.config.eventy_config import get_config, set_config, EventyConfig, _config
@@ -58,3 +57,4 @@ class TestEventyConfigFunctions:
         assert len(retrieved_config.get_payload_types()) == 2
         assert str in retrieved_config.get_payload_types()
         assert int in retrieved_config.get_payload_types()
+        assert retrieved_config.get_subscriber_types() == []

@@ -194,7 +194,9 @@ class RedisQueueManager(QueueManager):
         for payload_type, queue in self._queues.items():
             if isinstance(queue, RedisFileEventQueue):
                 # Check if Redis is available by checking if _redis is not None
-                status[payload_type] = queue._redis is not None  # pylint: disable=protected-access
+                status[payload_type] = (
+                    queue._redis is not None
+                )  # pylint: disable=protected-access
             else:
                 status[payload_type] = False
 
