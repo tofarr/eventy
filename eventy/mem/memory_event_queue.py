@@ -98,7 +98,9 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
                         created_at=self._event_metadata[event_id],
                     )
                     # Process event asynchronously and create result
-                    asyncio.create_task(self._notify_subscriber_and_create_result(subscription, event))
+                    asyncio.create_task(
+                        self._notify_subscriber_and_create_result(subscription, event)
+                    )
 
         return subscription
 
@@ -148,7 +150,7 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
 
     async def publish(self, payload: T) -> QueueEvent[T]:
         """Publish an event to this queue
-        
+
         When an event is published, it will be delivered to all subscribers.
         For each subscriber that receives the event, an EventResult will be
         created and stored to track whether the subscriber successfully
@@ -176,7 +178,9 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
 
         # Notify all subscribers asynchronously and create results
         for subscription in self._subscriptions.values():
-            asyncio.create_task(self._notify_subscriber_and_create_result(subscription, event))
+            asyncio.create_task(
+                self._notify_subscriber_and_create_result(subscription, event)
+            )
 
         return event
 
@@ -305,23 +309,25 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
 
         return count
 
-    async def _notify_subscriber_and_create_result(self, subscription: Subscription[T], event: QueueEvent[T]) -> None:
+    async def _notify_subscriber_and_create_result(
+        self, subscription: Subscription[T], event: QueueEvent[T]
+    ) -> None:
         """Notify a subscriber about an event and create an EventResult"""
         success = True
         details = None
-        
+
         try:
             await subscription.subscriber.on_event(event, self)
         except Exception as e:
             success = False
             details = str(e)
-        
+
         # Create and store the result
         result = EventResult(
             worker_id=self.worker_id,
             event_id=event.id,
             success=success,
-            details=details
+            details=details,
         )
         self._results[result.id] = result
 

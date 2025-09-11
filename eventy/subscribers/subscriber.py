@@ -32,7 +32,7 @@ def get_payload_type(subscriber_type: type):
     subscriber_payload_types = get_args(subscriber_type)
     if subscriber_payload_types:
         return subscriber_payload_types[0]
-    
+
     # Check if type is a class that extends Subscriber[PayloadType]
     for base in subscriber_type.__orig_bases__:
         origin = get_origin(base)
@@ -41,6 +41,5 @@ def get_payload_type(subscriber_type: type):
         if origin is not None and issubclass(origin, Subscriber):
             args = get_args(base)
             return args[0]
-        
-    raise TypeError(f'Could not get payload type for {subscriber_type}')
-    
+
+    raise TypeError(f"Could not get payload type for {subscriber_type}")

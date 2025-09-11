@@ -1,9 +1,16 @@
 from abc import ABC, abstractmethod
 import logging
 import os
+from pathlib import Path
 from typing import TypeVar, Optional
 
-from eventy.constants import EVENTY_QUEUE_MANAGER, EVENTY_ROOT_DIR
+from eventy.constants import (
+    DEFAULT_ROOT_DIR,
+    EVENTY_QUEUE_MANAGER,
+    EVENTY_REDIS_PASSWORD,
+    EVENTY_REDIS_URL,
+    EVENTY_ROOT_DIR,
+)
 from eventy.event_queue import EventQueue
 from eventy.config.eventy_config import get_config
 from eventy.util import get_impl
@@ -62,15 +69,18 @@ async def get_default_queue_manager() -> QueueManager:
             manager_class = get_impl(EVENTY_QUEUE_MANAGER, QueueManager)
             _default_queue_manager = manager_class()
         except ValueError:
-            root_dir = os.getenv(EVENTY_ROOT_DIR)
-            if root_dir:
-                from eventy.fs.file_event_queue_manager import FileEventQueueManager
-
-                _default_queue_manager = FileEventQueueManager(root_dir=root_dir)
+            redis_url = os.getenv(EVENTY_REDIS_URL)
+            root_dir = Path(os.getenv(EVENTY_ROOT_DIR, DEFAULT_ROOT_DIR))
+            if redis_url:
+                from eventy.redis.redis_queue_manager import RedisQueueManager
+                _default_queue_manager = RedisQueueManager(
+                    root_dir=root_dir,
+                    redis_url=redis_url,
+                    redis_password=os.getenv(EVENTY_REDIS_PASSWORD),
+                )
             else:
-                from eventy.mem.memory_queue_manager import MemoryQueueManager
-
-                _default_queue_manager = MemoryQueueManager()
+                from eventy.fs.file_queue_manager import FileQueueManager
+                _default_queue_manager = FileQueueManager(root_dir=root_dir)
 
         try:
             config = get_config()

@@ -17,7 +17,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
-class FileEventQueueManager(QueueManager):
+class FileQueueManager(QueueManager):
     """
     File-based implementation of QueueManager.
 
@@ -62,7 +62,7 @@ class FileEventQueueManager(QueueManager):
         """Check if the manager has been entered, raise error if not"""
         if not self._entered:
             raise EventyError(
-                "FileEventQueueManager must be entered using async context manager before use"
+                "FileQueueManager must be entered using async context manager before use"
             )
 
     async def __aenter__(self):
@@ -74,7 +74,7 @@ class FileEventQueueManager(QueueManager):
 
         await asyncio.gather(*[queue.__aenter__() for queue in self._queues.values()])
 
-        _LOGGER.info(f"Started FileEventQueueManager at {self.root_dir}")
+        _LOGGER.info(f"Started FileQueueManager at {self.root_dir}")
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
@@ -82,10 +82,15 @@ class FileEventQueueManager(QueueManager):
         self._entered = False
 
         # Close all queues
-        await asyncio.gather(*[queue.__aexit__(exc_type, exc_value, traceback) for queue in self._queues.values()])
+        await asyncio.gather(
+            *[
+                queue.__aexit__(exc_type, exc_value, traceback)
+                for queue in self._queues.values()
+            ]
+        )
 
         self._queues.clear()
-        _LOGGER.info(f"Stopped FileEventQueueManager at {self.root_dir}")
+        _LOGGER.info(f"Stopped FileQueueManager at {self.root_dir}")
 
     def _create_queue(self, payload_type: type[T]) -> EventQueue[T]:
         """Create a new event queue instance based on watchdog availability"""

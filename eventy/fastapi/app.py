@@ -22,12 +22,12 @@ queue_manager = None
 async def lifespan(app: FastAPI):
     """
     Manage the application lifecycle.
-    
+
     This context manager handles the startup and shutdown of the queue manager,
     ensuring proper resource management.
     """
     global queue_manager
-    
+
     # Startup: Initialize and enter the queue manager
     queue_manager = await get_default_queue_manager()
     async with queue_manager:
@@ -41,7 +41,7 @@ app = FastAPI(
     title="Eventy FastAPI App",
     description="A FastAPI application integrated with eventy queue manager",
     version="0.1.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 
@@ -49,13 +49,8 @@ app = FastAPI(
 async def health_check():
     """
     Health check endpoint.
-    
+
     Returns:
         dict: Application health status
     """
-    return {
-        "status": "healthy",
-        "queue_manager_active": queue_manager is not None
-    }
-
-
+    return {"status": "healthy", "queue_manager_active": queue_manager is not None}

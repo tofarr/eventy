@@ -6,6 +6,7 @@ from eventy.subscribers.subscriber import Subscriber
 @dataclass
 class DefaultEventyConfig(EventyConfig):
     """Configuration object for eventy"""
+
     payload_types: list[type]
     subscriber_types: list[type[Subscriber]] = field(default_factory=list)
 

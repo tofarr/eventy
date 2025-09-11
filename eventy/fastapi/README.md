@@ -64,5 +64,5 @@ This ensures proper resource management and cleanup of the eventy queue system.
 
 The `queue_manager_type` will vary depending on your eventy configuration:
 - `MemoryQueueManager` - In-memory queue (default)
-- `FileEventQueueManager` - File-based queue (when `EVENTY_ROOT_DIR` is set)
+- `FileQueueManager` - File-based queue (when `EVENTY_ROOT_DIR` is set)
 - Custom queue manager (when `EVENTY_QUEUE_MANAGER` is set)

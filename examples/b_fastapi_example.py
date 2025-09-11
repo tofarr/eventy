@@ -43,14 +43,14 @@ class PrintSubscriber(BaseModel, Subscriber[MyMsg]):
     async def on_event(
         self, event: QueueEvent[MyMsg], event_queue: EventQueue[MyMsg]
     ) -> None:
-       print(f"📤 Received message (Event ID: {event.id}): {event.payload.msg}")
+        print(f"📤 Received message (Event ID: {event.id}): {event.payload.msg}")
 
 
 @app.get("/")
 async def serve_index():
     """
     Serve the main HTML page for the WebSocket demo.
-    
+
     Returns:
         FileResponse: The HTML page
     """
@@ -59,7 +59,7 @@ async def serve_index():
     # Navigate to the static directory
     static_dir = os.path.join(current_dir, "static")
     html_file = os.path.join(static_dir, "index.html")
-    
+
     if os.path.exists(html_file):
         return FileResponse(html_file)
     else:
@@ -74,20 +74,22 @@ if os.path.exists(static_dir):
 
 
 def main():
-    set_config(DefaultEventyConfig(
-        payload_types=[MyMsg],
-        subscriber_types=[PrintSubscriber],
-    ))
+    set_config(
+        DefaultEventyConfig(
+            payload_types=[MyMsg],
+            subscriber_types=[PrintSubscriber],
+        )
+    )
 
     # Generate a random port between 8000 and 9000
     random_port = random.randint(8000, 9000)
-    
+
     # Add the port argument to sys.argv if not already specified
-    if '--port' not in sys.argv:
-        sys.argv.extend(['--port', str(random_port)])
-    
+    if "--port" not in sys.argv:
+        sys.argv.extend(["--port", str(random_port)])
+
     print(f"🎲 Using random port: {random_port}")
-    
+
     # Run main with this module's app
     fastapi_main("b_fastapi_example:app")
 

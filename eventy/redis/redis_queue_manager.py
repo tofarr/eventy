@@ -19,7 +19,7 @@ _LOGGER = logging.getLogger(__name__)
 class RedisQueueManager(QueueManager):
     """
     Redis-enhanced file-based implementation of QueueManager.
-    
+
     Creates RedisFileEventQueue instances that use Redis for coordination
     and distributed event processing while maintaining filesystem persistence.
     """
@@ -27,10 +27,11 @@ class RedisQueueManager(QueueManager):
     root_dir: Path
     redis_url: str = field(default="redis://localhost:6379")
     redis_db: int = field(default=1)
+    redis_password: str | None = field(default=None)
     redis_prefix: str = field(default="eventy")
     worker_id: UUID = field(default_factory=uuid4)
     serializer: Serializer = field(default_factory=get_default_serializer)
-    
+
     # Redis-specific configuration
     claim_expiration_seconds: int = field(default=300)  # 5 minutes
     resync_lock_timeout_seconds: int = field(default=30)
@@ -75,10 +76,12 @@ class RedisQueueManager(QueueManager):
         self._entered = False
 
         # Close all queues
-        await asyncio.gather(*[
-            queue.__aexit__(exc_type, exc_value, traceback) 
-            for queue in self._queues.values()
-        ])
+        await asyncio.gather(
+            *[
+                queue.__aexit__(exc_type, exc_value, traceback)
+                for queue in self._queues.values()
+            ]
+        )
 
         self._queues.clear()
         _LOGGER.info(f"Stopped RedisQueueManager at {self.root_dir}")
@@ -86,12 +89,13 @@ class RedisQueueManager(QueueManager):
     def _create_queue(self, payload_type: type[T]) -> EventQueue[T]:
         """Create a new Redis-enhanced event queue instance"""
         queue_dir = self.root_dir / payload_type.__name__
-        
+
         queue = RedisFileEventQueue(
             root_dir=queue_dir,
             payload_type=payload_type,
             redis_url=self.redis_url,
             redis_db=self.redis_db,
+            redis_password=self.redis_password,
             redis_prefix=self.redis_prefix,
             worker_id=self.worker_id,
             event_serializer=self.serializer,
@@ -103,7 +107,7 @@ class RedisQueueManager(QueueManager):
             enable_pubsub_monitor=self.enable_pubsub_monitor,
             resync=self.resync,
         )
-        
+
         _LOGGER.debug(f"Created RedisFileEventQueue for {payload_type}")
         return queue
 
@@ -162,36 +166,36 @@ class RedisQueueManager(QueueManager):
     async def reset(self, payload_type: type[T]):
         """Clear all Events, Results and claims for a payload type"""
         self._check_entered()
-        
+
         if payload_type not in self._queues:
             raise EventyError(f"No queue found for payload type: {payload_type}")
-            
+
         queue: RedisFileEventQueue[T] = self._queues[payload_type]
-        
+
         # Reset the queue (this will clear filesystem and Redis data)
         await queue.reset()
-        
+
         _LOGGER.info(f"Reset Redis queue for payload type: {payload_type}")
 
     async def set_resync_for_all_queues(self, resync: bool) -> None:
         """Enable or disable resync for all registered queues"""
         self.resync = resync
-        
+
         for queue in self._queues.values():
             if isinstance(queue, RedisFileEventQueue):
                 queue.resync = resync
-                
+
         _LOGGER.info(f"Set resync={resync} for all queues")
 
     async def get_redis_connection_status(self) -> Dict[type, bool]:
         """Get Redis connection status for all registered queues"""
         status = {}
-        
+
         for payload_type, queue in self._queues.items():
             if isinstance(queue, RedisFileEventQueue):
                 # Check if Redis is available by checking if _redis is not None
                 status[payload_type] = queue._redis is not None
             else:
                 status[payload_type] = False
-                
+
         return status

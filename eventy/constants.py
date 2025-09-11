@@ -5,6 +5,10 @@ to avoid hardcoded strings and provide better maintainability.
 """
 
 # Queue Manager Configuration
+import os
+from pathlib import Path
+
+
 EVENTY_QUEUE_MANAGER = "EVENTY_QUEUE_MANAGER"
 """Environment variable to override the default queue manager implementation.
 Set this to a fully qualified class name to use a custom QueueManager implementation.
@@ -29,3 +33,15 @@ No default - this must be set to use the configuration system.
 EVENTY_ROOT_DIR = "EVENTY_ROOT_DIR"
 """Environment variable to specify the root directory for file system based implementation
 """
+
+DEFAULT_ROOT_DIR = str(Path(os.path.expanduser("~")) / ".eventy")
+""" Default root directory
+"""
+
+# Redis configuration
+EVENTY_REDIS_URL = "EVENTY_REDIS_URL"
+"""Environment variable to specify the redis url for redis based implementation"""
+
+# Redis configuration
+EVENTY_REDIS_PASSWORD = "EVENTY_REDIS_PASSWORD"
+"""Environment variable to specify the redis password for redis based implementation"""
