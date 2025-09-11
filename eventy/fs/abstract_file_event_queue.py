@@ -11,7 +11,7 @@ from uuid import UUID, uuid4
 from eventy.claim import Claim
 from eventy.event_queue import EventQueue
 from eventy.event_result import EventResult
-from eventy.eventy_error import EventyError
+from eventy.eventy_error import EventyError, SkipException
 from eventy.page import Page
 from eventy.queue_event import QueueEvent
 from eventy.serializers.serializer import Serializer, get_default_serializer
@@ -506,10 +506,11 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
             except Exception as e:
                 success = False
                 details = str(e)
-                _LOGGER.error(
-                    f"Error notifying subscriber {subscription.id} about event {event.id}: {e}",
-                    exc_info=True,
-                )
+                if isinstance(e, SkipException):
+                    _LOGGER.info(
+                        f"Error notifying subscriber {subscription.id} about event {event.id}: {e}",
+                        exc_info=True,
+                    )
 
             # Create and store the result
             result = EventResult(
