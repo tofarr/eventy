@@ -116,7 +116,13 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
         return self.payload_type
 
     async def publish(self, payload: T) -> QueueEvent[T]:
-        """Publish an event to this queue"""
+        """Publish an event to this queue
+        
+        When an event is published, it will be delivered to all subscribers.
+        For each subscriber that receives the event, an EventResult will be
+        created and stored to track whether the subscriber successfully
+        processed the event or encountered an error.
+        """
         self._check_running()
 
         # Try to create event with sequential ID, recalculating if file exists
@@ -489,16 +495,30 @@ class AbstractFileEventQueue(EventQueue[T], ABC):
         subscriber_count = len(subscriptions)
 
         for subscription in subscriptions:
+            success = True
+            details = None
+            
             try:
                 await subscription.subscriber.on_event(event, self)
                 _LOGGER.debug(
                     f"Notified subscriber {subscription.id} about event {event.id}"
                 )
             except Exception as e:
+                success = False
+                details = str(e)
                 _LOGGER.error(
                     f"Error notifying subscriber {subscription.id} about event {event.id}: {e}",
                     exc_info=True,
                 )
+            
+            # Create and store the result
+            result = EventResult(
+                worker_id=self.worker_id,
+                event_id=event.id,
+                success=success,
+                details=details
+            )
+            await self._store_result(result)
 
         if subscriber_count > 0:
             _LOGGER.info(
