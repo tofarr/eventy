@@ -78,7 +78,7 @@ class MemoryQueueManager(QueueManager):
 
         # Enter the queue context manually
         if self._entered:
-            await queue.__aenter__()
+            await queue.__aenter__()  # pylint: disable=unnecessary-dunder-call
 
         self._queues[payload_type] = queue
         _LOGGER.info(f"Registered queue for payload type: {payload_type}")
@@ -107,5 +107,5 @@ class MemoryQueueManager(QueueManager):
     async def reset(self, payload_type: type[T]):
         queue = MemoryEventQueue(payload_type=payload_type, serializer=self.serializer)
         if self._entered:
-            await queue.__aenter__()
+            await queue.__aenter__()  # pylint: disable=unnecessary-dunder-call
         self._queues[payload_type] = queue

@@ -3,17 +3,6 @@ import logging
 from typing import Annotated, TypeVar, Union
 from uuid import UUID, uuid4
 
-from eventy.event_queue import EventQueue
-from eventy.event_result import EventResult
-from eventy.config.eventy_config import EventyConfig
-from eventy.fastapi.websocket_subscriber import (
-    SERIALIZERS,
-    WEBSOCKETS,
-    WebsocketSubscriber,
-)
-from eventy.queue_manager import QueueManager
-from eventy.queue_event import QueueEvent
-
 from fastapi import (
     APIRouter,
     FastAPI,
@@ -24,6 +13,16 @@ from fastapi import (
 from fastapi.websockets import WebSocket, WebSocketState
 from pydantic import BaseModel, Field, TypeAdapter
 
+from eventy.config.eventy_config import EventyConfig
+from eventy.event_queue import EventQueue
+from eventy.event_result import EventResult
+from eventy.fastapi.websocket_subscriber import (
+    SERIALIZERS,
+    WEBSOCKETS,
+    WebsocketSubscriber,
+)
+from eventy.queue_event import QueueEvent
+from eventy.queue_manager import QueueManager
 from eventy.serializers.pydantic_serializer import PydanticSerializer
 from eventy.subscribers.subscriber import Subscriber, get_payload_type
 
@@ -42,7 +41,7 @@ async def add_endpoints(
         fastapi.include_router(router)
 
 
-def add_queue_endpoints(
+def add_queue_endpoints(  # pylint: disable=too-many-locals,too-many-statements
     fastapi: FastAPI,
     payload_type: type[T],
     queue_manager: QueueManager,
@@ -126,8 +125,8 @@ def add_queue_endpoints(
         try:
             event = await event_queue.get_event(id)
             return event
-        except Exception:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        except Exception as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
 
     @fastapi.get("/event")
     async def batch_get_events(ids: list[int]) -> list[EventResponse | None]:
@@ -143,8 +142,8 @@ def add_queue_endpoints(
         event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
         try:
             return await event_queue.search_subscriptions(page_id, limit)
-        except Exception:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        except Exception as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
 
     @fastapi.post("/subscriber")
     async def add_subscriber(subscriber: subscriber_type) -> SubscriptionResponse:  # type: ignore
@@ -157,9 +156,9 @@ def add_queue_endpoints(
         event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
         try:
             subscriber = await event_queue.get_subscriber(id)
-            return SubscriptionResponse(id, subscriber)
-        except Exception:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+            return SubscriptionResponse(id=id, subscriber=subscriber)
+        except Exception as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
 
     @fastapi.delete("/subscriber/{id}")
     async def remove_subscriber(id: UUID) -> bool:
@@ -185,17 +184,17 @@ def add_queue_endpoints(
                 created_at__gte=created_at__gte,
                 created_at__lte=created_at__lte,
             )
-        except Exception:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        except Exception as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
 
     @fastapi.get("/result/{id}")
     async def get_result(id: UUID) -> EventResult:  # type: ignore
         event_queue: EventQueue[T] = await queue_manager.get_event_queue(payload_type)
         try:
             result = await event_queue.get_result(id)
-            return SubscriptionResponse(id, result)
-        except Exception:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+            return result
+        except Exception as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND) from exc
 
     @fastapi.get("/result")
     async def batch_get_results(result_ids: list[int]) -> list[EventResult | None]:
@@ -223,7 +222,7 @@ def add_queue_endpoints(
                 data = await websocket.receive_json()
                 payload = payload_type_adapter.validate_python(data)
                 await event_queue.publish(payload)
-        except WebSocketDisconnect as e:
+        except WebSocketDisconnect:
             _LOGGER.debug("websocket_closed")
         finally:
             await event_queue.unsubscribe(subscription.id)

@@ -137,7 +137,7 @@ class RedisQueueManager(QueueManager):
         queue = self._create_queue(payload_type)
 
         if self._entered:
-            await queue.__aenter__()
+            await queue.__aenter__()  # pylint: disable=unnecessary-dunder-call
 
         self._queues[payload_type] = queue
         _LOGGER.info(f"Registered Redis queue for payload type: {payload_type}")
@@ -194,7 +194,7 @@ class RedisQueueManager(QueueManager):
         for payload_type, queue in self._queues.items():
             if isinstance(queue, RedisFileEventQueue):
                 # Check if Redis is available by checking if _redis is not None
-                status[payload_type] = queue._redis is not None
+                status[payload_type] = queue._redis is not None  # pylint: disable=protected-access
             else:
                 status[payload_type] = False
 
