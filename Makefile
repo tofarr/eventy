@@ -18,6 +18,12 @@ lint-report:  ## Run pylint with detailed report
 test:  ## Run tests using pytest
 	poetry run pytest
 
+test-cov:  ## Run tests with coverage report
+	poetry run pytest --cov=eventy --cov-report=term-missing --ignore=tests/test_watchdog_file_event_queue.py
+
+test-cov-fail:  ## Run tests with coverage requirement (66% minimum)
+	poetry run pytest --cov=eventy --cov-report=term-missing --cov-fail-under=66 --ignore=tests/test_watchdog_file_event_queue.py
+
 format:  ## Format code using black
 	poetry run black eventy tests
 
