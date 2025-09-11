@@ -119,8 +119,17 @@ class TestRedisFileEventQueueSpecific(unittest.IsolatedAsyncioTestCase):
     async def test_publish_event(self):
         """Test publishing an event with Redis coordination"""
         mock_redis = AsyncMock()
-        mock_redis.incr.return_value = 1
+        mock_redis.set.return_value = True  # For updating event counter
+        mock_redis.get.return_value = None  # No existing counter in Redis
         mock_redis.publish.return_value = 1
+        mock_redis.ping.return_value = True
+        
+        # Set up pubsub mock properly
+        mock_pubsub = MagicMock()
+        mock_pubsub.subscribe = AsyncMock(return_value=None)
+        mock_pubsub.unsubscribe = AsyncMock(return_value=None)
+        mock_pubsub.close = AsyncMock(return_value=None)
+        mock_redis.pubsub = MagicMock(return_value=mock_pubsub)
         
         queue = await self.create_redis_queue()
         
@@ -133,7 +142,7 @@ class TestRedisFileEventQueueSpecific(unittest.IsolatedAsyncioTestCase):
                 assert event.id == 1
                 
                 # Verify Redis operations were called
-                mock_redis.incr.assert_called()
+                mock_redis.set.assert_called()
                 mock_redis.publish.assert_called()
 
     async def test_create_claim_success(self):
@@ -141,6 +150,14 @@ class TestRedisFileEventQueueSpecific(unittest.IsolatedAsyncioTestCase):
         mock_redis = AsyncMock()
         mock_redis.set.return_value = True  # Successful claim
         mock_redis.publish.return_value = 1
+        mock_redis.ping.return_value = True
+        
+        # Set up pubsub mock properly
+        mock_pubsub = MagicMock()
+        mock_pubsub.subscribe = AsyncMock(return_value=None)
+        mock_pubsub.unsubscribe = AsyncMock(return_value=None)
+        mock_pubsub.close = AsyncMock(return_value=None)
+        mock_redis.pubsub = MagicMock(return_value=mock_pubsub)
         
         queue = await self.create_redis_queue()
         
@@ -160,6 +177,14 @@ class TestRedisFileEventQueueSpecific(unittest.IsolatedAsyncioTestCase):
         """Test failed claim creation (already exists)"""
         mock_redis = AsyncMock()
         mock_redis.set.return_value = False  # Claim already exists
+        mock_redis.ping.return_value = True
+        
+        # Set up pubsub mock properly
+        mock_pubsub = MagicMock()
+        mock_pubsub.subscribe = AsyncMock(return_value=None)
+        mock_pubsub.unsubscribe = AsyncMock(return_value=None)
+        mock_pubsub.close = AsyncMock(return_value=None)
+        mock_redis.pubsub = MagicMock(return_value=mock_pubsub)
         
         queue = await self.create_redis_queue()
         
@@ -172,7 +197,25 @@ class TestRedisFileEventQueueSpecific(unittest.IsolatedAsyncioTestCase):
     async def test_get_claim_from_redis(self):
         """Test getting a claim from Redis"""
         mock_redis = AsyncMock()
-        mock_redis.get.return_value = b'{"worker_id": "test-worker", "data": "test_data", "created_at": "2023-01-01T00:00:00Z"}'
+        
+        # Set up different return values for different keys
+        def mock_get(key):
+            if "next_event_id" in key:
+                return None  # No existing counter
+            elif "claim:test_claim" in key:
+                return '{"worker_id": "12345678-1234-5678-1234-567812345678", "data": "test_data", "created_at": "2023-01-01T00:00:00Z"}'
+            return None
+            
+        mock_redis.get.side_effect = mock_get
+        mock_redis.set.return_value = True
+        mock_redis.ping.return_value = True
+        
+        # Set up pubsub mock properly
+        mock_pubsub = MagicMock()
+        mock_pubsub.subscribe = AsyncMock(return_value=None)
+        mock_pubsub.unsubscribe = AsyncMock(return_value=None)
+        mock_pubsub.close = AsyncMock(return_value=None)
+        mock_redis.pubsub = MagicMock(return_value=mock_pubsub)
         
         queue = await self.create_redis_queue()
         
@@ -181,7 +224,7 @@ class TestRedisFileEventQueueSpecific(unittest.IsolatedAsyncioTestCase):
                 claim = await queue.get_claim("test_claim")
                 
                 assert claim.id == "test_claim"
-                assert claim.worker_id == queue.worker_id
+                assert str(claim.worker_id) == "12345678-1234-5678-1234-567812345678"
                 assert claim.data == "test_data"
 
     async def test_subscribe_publishes_to_redis(self):
@@ -190,6 +233,14 @@ class TestRedisFileEventQueueSpecific(unittest.IsolatedAsyncioTestCase):
         
         mock_redis = AsyncMock()
         mock_redis.publish.return_value = 1
+        mock_redis.ping.return_value = True
+        
+        # Set up pubsub mock properly
+        mock_pubsub = MagicMock()
+        mock_pubsub.subscribe = AsyncMock(return_value=None)
+        mock_pubsub.unsubscribe = AsyncMock(return_value=None)
+        mock_pubsub.close = AsyncMock(return_value=None)
+        mock_redis.pubsub = MagicMock(return_value=mock_pubsub)
         
         queue = await self.create_redis_queue()
         
@@ -208,6 +259,14 @@ class TestRedisFileEventQueueSpecific(unittest.IsolatedAsyncioTestCase):
         
         mock_redis = AsyncMock()
         mock_redis.publish.return_value = 1
+        mock_redis.ping.return_value = True
+        
+        # Set up pubsub mock properly
+        mock_pubsub = MagicMock()
+        mock_pubsub.subscribe = AsyncMock(return_value=None)
+        mock_pubsub.unsubscribe = AsyncMock(return_value=None)
+        mock_pubsub.close = AsyncMock(return_value=None)
+        mock_redis.pubsub = MagicMock(return_value=mock_pubsub)
         
         queue = await self.create_redis_queue()
         

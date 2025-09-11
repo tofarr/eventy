@@ -72,30 +72,32 @@ class RedisFileEventQueue(AbstractFileEventQueue[T]):
             return self
             
         # Initialize Redis connection
-        self._redis = redis.from_url(self.redis_url, db=self.redis_db, decode_responses=True)
-        
-        # Test Redis connection
         try:
+            self._redis = redis.from_url(self.redis_url, db=self.redis_db, decode_responses=True)
             await self._redis.ping()
             _LOGGER.info(f"Connected to Redis at {self.redis_url}")
-        except Exception as e:
-            _LOGGER.error(f"Failed to connect to Redis: {e}")
-            raise
             
-        # Initialize next event ID from Redis or filesystem
-        await self._initialize_redis_event_counter()
+            # Initialize next event ID from Redis or filesystem
+            await self._initialize_redis_event_counter()
+            
+            # Set up pubsub
+            self._pubsub = self._redis.pubsub()
+            await self._pubsub.subscribe(self._get_pubsub_channel())
+            
+            # Start background pubsub monitoring (if enabled)
+            self._stop_pubsub = False
+            if self.enable_pubsub_monitor:
+                self._pubsub_task = asyncio.create_task(self._pubsub_monitor_loop())
+                
+        except Exception as e:
+            _LOGGER.warning(f"Failed to connect to Redis: {e}. Falling back to filesystem-only mode.")
+            self._redis = None
+            self._pubsub = None
+            # Initialize event counter from filesystem only
+            self._initialize_event_counter()
         
-        # Set up pubsub
-        self._pubsub = self._redis.pubsub()
-        await self._pubsub.subscribe(self._get_pubsub_channel())
-        
-        # Start background pubsub monitoring (if enabled)
-        self._stop_pubsub = False
-        if self.enable_pubsub_monitor:
-            self._pubsub_task = asyncio.create_task(self._pubsub_monitor_loop())
-        
-        # Handle resync if requested
-        if self.resync:
+        # Handle resync if requested (only if Redis is available)
+        if self.resync and self._redis:
             await self._handle_resync_request()
         
         self.running = True
@@ -153,9 +155,10 @@ class RedisFileEventQueue(AbstractFileEventQueue[T]):
             _LOGGER.info(f"Regenerated next event ID from filesystem: {self.next_event_id}")
             
     async def _update_redis_event_counter(self, event_id: int):
-        """Update the Redis event counter"""
-        redis_key = self._get_redis_key("next_event_id")
-        await self._redis.set(redis_key, event_id + 1)
+        """Update the Redis event counter (if Redis is available)"""
+        if self._redis:
+            redis_key = self._get_redis_key("next_event_id")
+            await self._redis.set(redis_key, event_id + 1)
         
     async def publish(self, payload: T) -> QueueEvent[T]:
         """Publish an event and notify via Redis pubsub"""
@@ -181,24 +184,25 @@ class RedisFileEventQueue(AbstractFileEventQueue[T]):
         if claim_file.exists():
             return False
             
-        # Try to create Redis exclusive lock
-        redis_key = self._get_redis_key("claim", claim_id)
-        lock_data = {
-            "worker_id": str(self.worker_id),
-            "created_at": datetime.now().isoformat(),
-            "data": data
-        }
-        
-        # Use SET with NX (only if not exists) and EX (expiration)
-        success = await self._redis.set(
-            redis_key, 
-            json.dumps(lock_data), 
-            nx=True, 
-            ex=self.claim_expiration_seconds
-        )
-        
-        if not success:
-            return False
+        # Try to create Redis exclusive lock (if Redis is available)
+        if self._redis:
+            redis_key = self._get_redis_key("claim", claim_id)
+            lock_data = {
+                "worker_id": str(self.worker_id),
+                "created_at": datetime.now().isoformat(),
+                "data": data
+            }
+            
+            # Use SET with NX (only if not exists) and EX (expiration)
+            success = await self._redis.set(
+                redis_key, 
+                json.dumps(lock_data), 
+                nx=True, 
+                ex=self.claim_expiration_seconds
+            )
+            
+            if not success:
+                return False
             
         # Create local claim file
         try:
@@ -219,8 +223,9 @@ class RedisFileEventQueue(AbstractFileEventQueue[T]):
             return True
             
         except FileExistsError:
-            # Clean up Redis lock if file creation failed
-            await self._redis.delete(redis_key)
+            # Clean up Redis lock if file creation failed (and Redis is available)
+            if self._redis:
+                await self._redis.delete(redis_key)
             return False
             
     async def get_claim(self, claim_id: str) -> Claim:
@@ -234,21 +239,23 @@ class RedisFileEventQueue(AbstractFileEventQueue[T]):
                 claim_data = f.read()
             return self.claim_serializer.deserialize(claim_data)
             
-        # Check Redis lock
-        redis_key = self._get_redis_key("claim", claim_id)
-        lock_data = await self._redis.get(redis_key)
-        
-        if lock_data is None:
-            raise EventyError(f"Claim {claim_id} not found")
+        # Check Redis lock (if Redis is available)
+        if self._redis:
+            redis_key = self._get_redis_key("claim", claim_id)
+            lock_data = await self._redis.get(redis_key)
             
-        # Parse Redis lock data and create Claim object
-        lock_info = json.loads(lock_data)
-        return Claim(
-            id=claim_id,
-            worker_id=UUID(lock_info["worker_id"]),
-            created_at=datetime.fromisoformat(lock_info["created_at"]),
-            data=lock_info.get("data")
-        )
+            if lock_data is not None:
+                # Parse Redis lock data and create Claim object
+                lock_info = json.loads(lock_data)
+                return Claim(
+                    id=claim_id,
+                    worker_id=UUID(lock_info["worker_id"]),
+                    created_at=datetime.fromisoformat(lock_info["created_at"]),
+                    data=lock_info.get("data")
+                )
+        
+        # Claim not found in filesystem or Redis
+        raise EventyError(f"Claim {claim_id} not found")
         
     async def subscribe(
         self,
