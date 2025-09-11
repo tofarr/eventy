@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import TypeVar
 from uuid import UUID
 from eventy.event_queue import EventQueue
+from eventy.eventy_error import SkipException
 from eventy.queue_event import QueueEvent
 from eventy.subscribers.subscriber import Subscriber
 
@@ -20,5 +21,6 @@ class WorkerMatchSubscriber(Subscriber[T]):
             event: The queue event that occurred
             event_queue: The event queue instance that can be used to access queue functionality
         """
-        if event_queue.get_worker_id() == self.worker_id:
-            await self.subscriber.on_event(event, event_queue)
+        if event_queue.get_worker_id() != self.worker_id:
+            raise SkipException()
+        await self.subscriber.on_event(event, event_queue)
