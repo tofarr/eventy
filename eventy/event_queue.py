@@ -302,7 +302,7 @@ class EventQueue(Generic[T], ABC):  # pylint: disable=too-many-public-methods
         count = 0
         page_id = None
         while True:
-            page = await self.search_results(
+            page = await self.search_claims(
                 page_id=page_id,
                 worker_id__eq=worker_id__eq,
                 created_at__gte=created_at__gte,
