@@ -89,7 +89,7 @@ def main():
     print(f"🎲 Using random port: {random_port}")
     
     # Run main with this module's app
-    fastapi_main("fastapi_example:app")
+    fastapi_main("b_fastapi_example:app")
 
 
 if __name__ == "__main__":

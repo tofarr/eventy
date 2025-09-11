@@ -97,8 +97,8 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
                         payload=payload,
                         created_at=self._event_metadata[event_id],
                     )
-                    # Process event asynchronously (fire and forget)
-                    asyncio.create_task(subscriber.on_event(event, self))
+                    # Process event asynchronously and create result
+                    asyncio.create_task(self._notify_subscriber_and_create_result(subscription, event))
 
         return subscription
 
@@ -147,7 +147,13 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
         return Page(items=page_items, next_page_id=next_page_id)
 
     async def publish(self, payload: T) -> QueueEvent[T]:
-        """Publish an event to this queue"""
+        """Publish an event to this queue
+        
+        When an event is published, it will be delivered to all subscribers.
+        For each subscriber that receives the event, an EventResult will be
+        created and stored to track whether the subscriber successfully
+        processed the event or encountered an error.
+        """
         self._check_entered()
 
         # Serialize payload to insulate from external changes
@@ -168,9 +174,9 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
             id=event_id, payload=deserialized_payload, created_at=created_at
         )
 
-        # Notify all subscribers asynchronously
+        # Notify all subscribers asynchronously and create results
         for subscription in self._subscriptions.values():
-            asyncio.create_task(subscription.subscriber.on_event(event, self))
+            asyncio.create_task(self._notify_subscriber_and_create_result(subscription, event))
 
         return event
 
@@ -298,6 +304,26 @@ class MemoryEventQueue(Generic[T], EventQueue[T]):
             count += 1
 
         return count
+
+    async def _notify_subscriber_and_create_result(self, subscription: Subscription[T], event: QueueEvent[T]) -> None:
+        """Notify a subscriber about an event and create an EventResult"""
+        success = True
+        details = None
+        
+        try:
+            await subscription.subscriber.on_event(event, self)
+        except Exception as e:
+            success = False
+            details = str(e)
+        
+        # Create and store the result
+        result = EventResult(
+            worker_id=self.worker_id,
+            event_id=event.id,
+            success=success,
+            details=details
+        )
+        self._results[result.id] = result
 
     # Additional method to add results (for testing/internal use)
     async def add_result(self, result: EventResult) -> None:
