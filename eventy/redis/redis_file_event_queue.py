@@ -181,7 +181,7 @@ class RedisFileEventQueue(AbstractFileEventQueue[T]):
         await self._publish_to_redis(
             "add_event", {"event_id": event.id, "worker_id": str(self.worker_id)}
         )
-
+        await self._notify_subscribers_cached(event)
         return event
 
     async def create_claim(self, claim_id: str, data: str | None = None) -> bool:
