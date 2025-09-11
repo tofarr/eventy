@@ -144,13 +144,13 @@ class RedisFileEventQueue(AbstractFileEventQueue[T]):
         # Try to get from Redis first
         next_id = await self._redis.get(redis_key)
         if next_id is not None:
-            self._next_event_id = int(next_id)
-            _LOGGER.debug(f"Loaded next event ID from Redis: {self._next_event_id}")
+            self.next_event_id = int(next_id)
+            _LOGGER.debug(f"Loaded next event ID from Redis: {self.next_event_id}")
         else:
             # Regenerate from filesystem
             self._initialize_event_counter()
-            await self._redis.set(redis_key, self._next_event_id)
-            _LOGGER.info(f"Regenerated next event ID from filesystem: {self._next_event_id}")
+            await self._redis.set(redis_key, self.next_event_id)
+            _LOGGER.info(f"Regenerated next event ID from filesystem: {self.next_event_id}")
             
     async def _update_redis_event_counter(self, event_id: int):
         """Update the Redis event counter"""
